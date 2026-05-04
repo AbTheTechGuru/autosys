@@ -1,0 +1,494 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── CSS Variables ─── */
+:root {
+  --g:  #C8973A;
+  --gl: #E2B96A;
+  --gd: #8B5E18;
+  --gg: rgba(200,151,58,.18);
+  --bg: #07070B;
+  --s1: #0E0E16;
+  --s2: #13131C;
+  --s3: #191924;
+  --s4: #21212E;
+  --s5: #2B2B3C;
+  --s6: #373750;
+  --t0: #F0EDE2;
+  --t1: #8A8680;
+  --t2: #4E4B58;
+  --ok: #16A34A;
+  --er: #DC2626;
+  --wa: #D97706;
+  --bl: #2563EB;
+  --pu: #7C3AED;
+  --te: #0D9488;
+  --sw: 258px;
+  --th: 60px;
+  --mb: 62px;
+}
+
+/* ─── Base ─── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Nunito', sans-serif;
+  background: var(--bg);
+  color: var(--t0);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--s6); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gd); }
+
+/* ─── Gold gradient text ─── */
+.gold-text {
+  background: linear-gradient(135deg, var(--gl), var(--g), var(--gd));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Gold gradient button ─── */
+.btn-gold {
+  background: linear-gradient(135deg, var(--gl), var(--g));
+  color: var(--bg);
+  box-shadow: 0 2px 14px rgba(200,151,58,.3);
+  transition: filter .16s, transform .16s, box-shadow .16s;
+}
+.btn-gold:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 20px rgba(200,151,58,.4);
+}
+.btn-gold:active { transform: translateY(0); }
+.btn-gold:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+  transform: none !important;
+  filter: none !important;
+}
+
+/* ─── Nav item active indicator ─── */
+.nav-item-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 2px;
+  background: var(--g);
+  border-radius: 0 2px 2px 0;
+}
+
+/* ─── WhatsApp bubbles ─── */
+.wa-bubble-out {
+  background: linear-gradient(135deg, #005C4B, #007A63);
+  border-radius: 12px 12px 3px 12px;
+  padding: 9px 13px;
+  max-width: 78%;
+}
+.wa-bubble-in {
+  background: var(--s4);
+  border-radius: 12px 12px 12px 3px;
+  padding: 9px 13px;
+  max-width: 78%;
+}
+
+/* ─── Kanban card grab cursor ─── */
+.kanban-card { cursor: grab; }
+.kanban-card:active { cursor: grabbing; }
+
+/* ─── Ticker animation ─── */
+.ticker-track {
+  display: flex;
+  gap: 60px;
+  animation: ticker 28s linear infinite;
+  white-space: nowrap;
+}
+
+/* ─── Grid background pattern ─── */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(255,255,255,.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.015) 1px, transparent 1px);
+  background-size: 38px 38px;
+}
+
+/* ─── Radial gold mesh ─── */
+.gold-mesh {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 48% at 22% 55%, rgba(200,151,58,.13) 0%, transparent 60%),
+    radial-gradient(ellipse 38% 38% at 76% 22%, rgba(200,151,58,.07) 0%, transparent 55%);
+  pointer-events: none;
+}
+
+/* ─── Progress bar transition ─── */
+.progress-fill {
+  transition: width 1s cubic-bezier(.34,1.56,.64,1);
+}
+
+/* ─── Sidebar transition ─── */
+.sidebar-transition {
+  transition: transform .25s cubic-bezier(.4,0,.2,1);
+}
+
+/* ─── Toggle switch ─── */
+.toggle-knob {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  background: #fff;
+  border-radius: 50%;
+  top: 3px;
+  left: 3px;
+  transition: transform .18s;
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+}
+.toggle-on .toggle-knob { transform: translateX(17px); }
+
+/* ─── Keyframes ─── */
+@keyframes ticker {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--gg); }
+  60%       { box-shadow: 0 0 22px 5px var(--gg); }
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+/* ─── Skeleton shimmer ─── */
+@keyframes shimmer {
+  0%   { background-position: -800px 0; }
+  100% { background-position:  800px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--s3) 25%, var(--s5) 50%, var(--s3) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 7px;
+}
+
+/* ─── Mobile overrides ─── */
+@media (max-width: 768px) {
+  :root {
+    --sw: 0px;
+  }
+}
+
+
+
+/*
+ * AutoSys Blog — globals.blog.css
+ * ─────────────────────────────────
+ * APPEND this to your existing src/styles/globals.css
+ * Contains: ticker animation, grid bg, gold mesh, prose styles
+ */
+
+/* ── Ticker (landing page feature list) ──────────────────────── */
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.ticker-track {
+  display: flex;
+  white-space: nowrap;
+  animation: ticker-scroll 28s linear infinite;
+  width: max-content;
+}
+
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+
+/* ── Grid background (hero sections) ────────────────────────── */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(200, 151, 58, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(200, 151, 58, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+/* ── Gold mesh glow (hero decorative) ───────────────────────── */
+.gold-mesh {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 80% 60% at 50% 30%,
+    rgba(200, 151, 58, 0.07) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+/* ── Gold text gradient ──────────────────────────────────────── */
+.gold-text {
+  background: linear-gradient(135deg, #C8973A 0%, #E2B96A 50%, #C8973A 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Glow animation (hero CTA button) ───────────────────────── */
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(200, 151, 58, 0.3), 0 4px 20px rgba(0,0,0,0.4); }
+  50%       { box-shadow: 0 0 36px rgba(200, 151, 58, 0.55), 0 4px 20px rgba(0,0,0,0.4); }
+}
+
+/* ── Slide up entrance ───────────────────────────────────────── */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Blog typography (applied inside .blog-content) ─────────── */
+.blog-content {
+  font-size: 16px;
+  line-height: 1.85;
+  color: var(--text-secondary, #8A8680);
+}
+
+.blog-content h1 {
+  font-family: 'Domine', Georgia, serif;
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 700;
+  color: var(--text-primary, #F0EDE2);
+  margin: 2em 0 0.6em;
+  scroll-margin-top: 80px;
+}
+
+.blog-content h2 {
+  font-family: 'Domine', Georgia, serif;
+  font-size: clamp(20px, 3vw, 28px);
+  font-weight: 700;
+  color: var(--text-primary, #F0EDE2);
+  margin: 2.2em 0 0.8em;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid rgba(200, 151, 58, 0.2);
+  scroll-margin-top: 80px;
+}
+
+.blog-content h3 {
+  font-family: 'Domine', Georgia, serif;
+  font-size: clamp(17px, 2.5vw, 22px);
+  font-weight: 700;
+  color: #E2B96A;
+  margin: 1.8em 0 0.6em;
+  scroll-margin-top: 80px;
+}
+
+.blog-content p {
+  margin: 0 0 1.35em;
+  color: var(--text-secondary, #8A8680);
+}
+
+.blog-content strong,
+.blog-content b {
+  color: var(--text-primary, #F0EDE2);
+  font-weight: 700;
+}
+
+.blog-content em,
+.blog-content i {
+  font-style: italic;
+  color: #C4BFB5;
+}
+
+.blog-content ul,
+.blog-content ol {
+  margin: 1em 0 1.5em 1.6em;
+  color: var(--text-secondary, #8A8680);
+  line-height: 1.8;
+}
+
+.blog-content ul { list-style: disc; }
+.blog-content ol { list-style: decimal; }
+
+.blog-content li {
+  margin-bottom: 0.5em;
+  padding-left: 0.3em;
+}
+
+.blog-content blockquote {
+  border-left: 3px solid #C8973A;
+  margin: 2em 0;
+  padding: 1em 1.5em;
+  border-radius: 0 12px 12px 0;
+  background: rgba(200, 151, 58, 0.06);
+  font-style: italic;
+  color: #E2B96A;
+  font-size: 15.5px;
+  line-height: 1.75;
+}
+
+.blog-content blockquote p {
+  color: #E2B96A;
+  margin: 0;
+}
+
+.blog-content blockquote cite {
+  display: block;
+  margin-top: 0.6em;
+  font-style: normal;
+  font-size: 13px;
+  color: rgba(226, 185, 106, 0.7);
+}
+
+.blog-content a {
+  color: #C8973A;
+  text-decoration: underline;
+  text-decoration-color: rgba(200, 151, 58, 0.4);
+  text-underline-offset: 3px;
+  transition: color 0.15s;
+}
+
+.blog-content a:hover {
+  color: #E2B96A;
+  text-decoration-color: rgba(226, 185, 106, 0.6);
+}
+
+.blog-content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  background: rgba(200, 151, 58, 0.1);
+  border: 1px solid rgba(200, 151, 58, 0.22);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 13.5px;
+  color: #E2B96A;
+}
+
+.blog-content pre {
+  background: #0A0A12;
+  border: 1px solid #1C1C2A;
+  border-radius: 12px;
+  padding: 1.3em 1.5em;
+  overflow-x: auto;
+  margin: 1.8em 0;
+  tab-size: 2;
+}
+
+.blog-content pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #E2E8F0;
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+.blog-content img {
+  width: 100%;
+  border-radius: 12px;
+  margin: 2em 0;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.blog-content hr {
+  border: none;
+  border-top: 1px solid rgba(200, 151, 58, 0.15);
+  margin: 2.5em 0;
+}
+
+.blog-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 14px;
+}
+
+.blog-content th {
+  background: rgba(200, 151, 58, 0.1);
+  color: #C8973A;
+  font-weight: 700;
+  padding: 0.7em 1em;
+  text-align: left;
+  border: 1px solid rgba(200, 151, 58, 0.2);
+}
+
+.blog-content td {
+  padding: 0.6em 1em;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #8A8680;
+}
+
+.blog-content tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* ── Line clamp utilities ────────────────────────────────────── */
+.line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+.line-clamp-2 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.line-clamp-3 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+
+/* ── Reading progress bar ────────────────────────────────────── */
+.reading-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #C8973A, #E2B96A);
+  z-index: 9999;
+  transition: width 0.1s linear;
+  box-shadow: 0 0 10px rgba(200, 151, 58, 0.5);
+}
+
+/* ── Blog card hover state ───────────────────────────────────── */
+.blog-card {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.2s ease,
+              border-color 0.15s ease;
+}
+
+.blog-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+/* ── Sticky CTA slide-up ─────────────────────────────────────── */
+@keyframes slide-up-sticky {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.sticky-cta-enter {
+  animation: slide-up-sticky 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── TOC active state transition ─────────────────────────────── */
+.toc-item {
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+/* ── Search input focus ──────────────────────────────────────── */
+.search-input:focus {
+  outline: none;
+  border-color: rgba(200, 151, 58, 0.5);
+  box-shadow: 0 0 0 3px rgba(200, 151, 58, 0.08);
+}
+
+/* ── Mobile blog nav adjustment ──────────────────────────────── */
+@media (max-width: 640px) {
+  .blog-content h2 { font-size: 20px; }
+  .blog-content h3 { font-size: 17px; }
+  .blog-content p  { font-size: 15px; }
+}

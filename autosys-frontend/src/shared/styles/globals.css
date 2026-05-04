@@ -1,0 +1,3 @@
+/* Shared styles — the canonical source is src/styles/globals.css */
+/* This file exists for modules that import from @/shared/styles/globals.css */
+@import '../../styles/globals.css';
