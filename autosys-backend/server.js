@@ -48,6 +48,8 @@ app.use(cors({
   ]
 }));
 
+app.options("*", cors());
+
 // ── Body parsing ──────────────────────────────────────────────
 // Webhook routes need raw body — skip json parsing for them
 app.use((req, res, next) => {
