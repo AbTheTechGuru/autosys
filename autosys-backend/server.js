@@ -15,40 +15,38 @@ const { createRateLimiters }        = require('./src/middleware/rateLimit');
 const { authenticate, requireRole } = require('./src/middleware/auth');
 const errorHandler                  = require('./src/middleware/errorHandler');
 
-app.get("/test-cors", (req, res) => {
-  res.json({
-    message: "CORS TEST WORKING"
-  });
-});
-
-app.use((req, res, next) => {
-  if (req.method === "OPTIONS") {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header(
-      "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-    );
-    res.header(
-      "Access-Control-Allow-Methods",
-      "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    );
-
-    return res.sendStatus(200);
-  }
-
-  next();
-});
-
 const app = express();
 
 // ── Security headers ──────────────────────────────────────────
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'none'"],
+      connectSrc: ["'self'"],
+      imgSrc:     ["'self'", 'data:', 'blob:'],
+    },
+  },
+  hsts:       { maxAge: 31536000, includeSubDomains: true, preload: true },
+  noSniff:    true,
+  frameguard: { action: 'deny' },
+}));
 
 // ── CORS ──────────────────────────────────────────────────────
+const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || [];
+
 app.use(cors({
-  origin: "*",
-  credentials: true
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked: ${origin}`));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
 
 // ── Body parsing ──────────────────────────────────────────────
 // Webhook routes need raw body — skip json parsing for them
@@ -76,9 +74,9 @@ app.use(pinoHttp({
 
 // ── Rate limiting ─────────────────────────────────────────────
 const { globalLimit, authLimit, aiLimit, webhookLimit } = createRateLimiters();
-// app.use(`/${env.API_VERSION}`, globalLimit);
-// app.use(`/${env.API_VERSION}/auth`, authLimit);
-// app.use(`/${env.API_VERSION}/ai`, aiLimit);
+app.use(`/${env.API_VERSION}`, globalLimit);
+app.use(`/${env.API_VERSION}/auth`, authLimit);
+app.use(`/${env.API_VERSION}/ai`, aiLimit);
 
 // ── IMPORT ROUTE MODULES ──────────────────────────────────────
 // FIX: server.js was importing non-existent files:
