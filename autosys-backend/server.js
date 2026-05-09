@@ -61,10 +61,10 @@ app.use(pinoHttp({
 }));
 
 // ── Rate limiting ─────────────────────────────────────────────
-// const { globalLimit, authLimit, aiLimit, webhookLimit } = createRateLimiters();
-app.use(`/${env.API_VERSION}`, globalLimit);
-app.use(`/${env.API_VERSION}/auth`, authLimit);
-app.use(`/${env.API_VERSION}/ai`, aiLimit);
+const { globalLimit, authLimit, aiLimit, webhookLimit } = createRateLimiters();
+// app.use(`/${env.API_VERSION}`, globalLimit);
+// app.use(`/${env.API_VERSION}/auth`, authLimit);
+// app.use(`/${env.API_VERSION}/ai`, aiLimit);
 
 // ── IMPORT ROUTE MODULES ──────────────────────────────────────
 // FIX: server.js was importing non-existent files:
