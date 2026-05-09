@@ -34,6 +34,8 @@ app.use(helmet({
 // ── CORS ──────────────────────────────────────────────────────
 const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || [];
 
+app.options('*', cors()); // Handle preflight for all routes
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
