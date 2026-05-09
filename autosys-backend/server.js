@@ -18,37 +18,23 @@ const errorHandler                  = require('./src/middleware/errorHandler');
 const app = express();
 
 // ── Security headers ──────────────────────────────────────────
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'none'"],
-      connectSrc: ["'self'"],
-      imgSrc:     ["'self'", 'data:', 'blob:'],
-    },
-  },
-  hsts:       { maxAge: 31536000, includeSubDomains: true, preload: true },
-  noSniff:    true,
-  frameguard: { action: 'deny' },
-}));
+app.use(helmet());
 
 // ── CORS ──────────────────────────────────────────────────────
 app.use(cors({
-  origin: [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "https://autosys-five.vercel.app"
-  ],
-  credentials: true,
+  origin: "*",
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "X-Idempotency-Key",
-    "X-Dealer-Id"
-  ]
+  allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
 app.options("*", cors());
+
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 // ── Body parsing ──────────────────────────────────────────────
 // Webhook routes need raw body — skip json parsing for them
@@ -75,7 +61,7 @@ app.use(pinoHttp({
 }));
 
 // ── Rate limiting ─────────────────────────────────────────────
-const { globalLimit, authLimit, aiLimit, webhookLimit } = createRateLimiters();
+// const { globalLimit, authLimit, aiLimit, webhookLimit } = createRateLimiters();
 app.use(`/${env.API_VERSION}`, globalLimit);
 app.use(`/${env.API_VERSION}/auth`, authLimit);
 app.use(`/${env.API_VERSION}/ai`, aiLimit);
