@@ -32,17 +32,20 @@ app.use(helmet({
 }));
 
 // ── CORS ──────────────────────────────────────────────────────
-const allowed = env.CORS_ORIGIN.split(',').map((s) => s.trim());
 app.use(cors({
-  origin(origin, cb) {
-    if (!origin && env.NODE_ENV === 'development') return cb(null, true);
-    if (!origin || allowed.includes(origin)) return cb(null, true);
-    cb(new Error(`CORS: origin ${origin} blocked`));
-  },
-  credentials:    true,
-  methods:        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Idempotency-Key', 'X-Dealer-Id'],
-  exposedHeaders: ['X-Total-Count', 'X-Request-Id'],
+  origin: [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://autosys-five.vercel.app"
+  ],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Idempotency-Key",
+    "X-Dealer-Id"
+  ]
 }));
 
 // ── Body parsing ──────────────────────────────────────────────
