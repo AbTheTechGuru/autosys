@@ -15,6 +15,24 @@ const { createRateLimiters }        = require('./src/middleware/rateLimit');
 const { authenticate, requireRole } = require('./src/middleware/auth');
 const errorHandler                  = require('./src/middleware/errorHandler');
 
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+    );
+    res.header(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    );
+
+    return res.sendStatus(200);
+  }
+
+  next();
+});
+
 const app = express();
 
 // ── Security headers ──────────────────────────────────────────
@@ -23,18 +41,8 @@ app.use(helmet());
 // ── CORS ──────────────────────────────────────────────────────
 app.use(cors({
   origin: "*",
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
 }));
-
-app.options("*", cors());
-
-app.use((req, res, next) => {
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  next();
-});
 
 // ── Body parsing ──────────────────────────────────────────────
 // Webhook routes need raw body — skip json parsing for them
