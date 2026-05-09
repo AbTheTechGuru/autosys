@@ -15,6 +15,12 @@ const { createRateLimiters }        = require('./src/middleware/rateLimit');
 const { authenticate, requireRole } = require('./src/middleware/auth');
 const errorHandler                  = require('./src/middleware/errorHandler');
 
+app.get("/test-cors", (req, res) => {
+  res.json({
+    message: "CORS TEST WORKING"
+  });
+});
+
 app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
     res.header("Access-Control-Allow-Origin", "*");
