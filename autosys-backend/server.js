@@ -32,22 +32,28 @@ app.use(helmet({
 }));
 
 // ── CORS ──────────────────────────────────────────────────────
-const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || [];
 
-app.options('*', cors()); // Handle preflight for all routes
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error(`CORS blocked: ${origin}`));
+    // Allow requests with no origin (mobile apps, Postman, curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
     }
+    return callback(new Error(`CORS blocked: ${origin}`));
   },
-  credentials: true,
+  credentials: true,   // ← required for cookies/JWT headers
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
+
+// Handle preflight for ALL routes — must be BEFORE your routes
+app.options('*', cors());
 
 
 // ── Body parsing ──────────────────────────────────────────────
