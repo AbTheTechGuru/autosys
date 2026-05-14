@@ -7,6 +7,7 @@ import { NAV_GROUPS } from '@/shared/constants';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore }  from '@/store/uiStore';
 import { useCrmStore } from '@/store/crmStore';
+import { useAuth }     from '@/context/AuthContext';
 import { cn }          from '@/shared/utils/cn';
 
 function NavItem({ item }) {
@@ -56,6 +57,7 @@ export function Sidebar({ open }) {
   const closeSidebar = useUIStore((s) => s.closeSidebar);
   const isAdmin      = ['admin', 'owner', 'superadmin'].includes(user?.role);
   const isSuperAdmin = user?.role === 'superadmin';
+  const { logout }   = useAuth();
 
   return (
     <>
@@ -142,6 +144,15 @@ export function Sidebar({ open }) {
             </div>
             <Icon name="settings" size={13} color="#4E4B58" />
           </NavLink>
+
+          {/* Logout button */}
+          <button
+            onClick={logout}
+            className="mt-1 w-full flex items-center gap-2 px-[8px] py-[7px] rounded-[8px] text-[12px] font-bold text-[#F87171] hover:bg-[rgba(248,113,113,0.08)] transition-colors cursor-pointer border-none bg-transparent"
+          >
+            <Icon name="arr" size={14} color="#F87171" />
+            Log Out
+          </button>
         </div>
       </aside>
     </>
