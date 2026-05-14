@@ -127,8 +127,8 @@ export function Sidebar({ open }) {
           })}
         </nav>
 
-        {/* User footer */}
-        <div className="px-3 py-[10px] border-t border-surface-4">
+        {/* User footer — pb-[72px] on mobile so content clears the 62px bottom nav bar */}
+        <div className="px-3 py-[10px] pb-[72px] md:pb-[10px] border-t border-surface-4">
           <NavLink
             to="/app/settings"
             className="flex items-center gap-2 cursor-pointer no-underline hover:bg-surface-3 rounded-[8px] px-[8px] py-[6px] transition-colors"
