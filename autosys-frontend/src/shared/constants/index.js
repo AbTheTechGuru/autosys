@@ -57,14 +57,14 @@ export const NAV_GROUPS = [
       { key: 'settings',  label: 'Settings',       icon: 'settings', path: '/app/settings' },
     ],
   },
-  // ── Admin-only section ──────────────────────────────────────
+  // ── Super Admin only — hidden from all dealers ──────────────
   {
     group: 'Super Admin',
-    adminOnly: true,
+    superOnly: true,
     items: [
-      { key: 'admin',           label: 'Overview',      icon: 'building', path: '/app/admin',          adminOnly: true },
-      { key: 'admin-blog',      label: 'Blog Posts',    icon: 'note',     path: '/app/admin/blog',     adminOnly: true },
-      { key: 'admin-blog-new',  label: 'Create Post',   icon: 'plus',     path: '/app/admin/blog/new', adminOnly: true },
+      { key: 'admin',           label: 'Overview',      icon: 'building', path: '/app/admin',          superOnly: true },
+      { key: 'admin-blog',      label: 'Blog Posts',    icon: 'note',     path: '/app/admin/blog',     superOnly: true },
+      { key: 'admin-blog-new',  label: 'Create Post',   icon: 'plus',     path: '/app/admin/blog/new', superOnly: true },
     ],
   },
 ];
@@ -155,10 +155,3 @@ export const BLOG_CATEGORIES      = ['sales-crm', 'inventory', 'marketing', 'bus
 export const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 export const REVENUE_DATA  = [52,68,45,88,102,79,115,88,142,158,134,176];
 export const LEADS_MONTHLY = [18,24,16,32,28,22,40,31,48,52,44,61];
-
-export const CAMPAIGN_TYPE = [
-  "Email",
-  "SMS",
-  "Push Notification",
-  "Social Media"
-];
