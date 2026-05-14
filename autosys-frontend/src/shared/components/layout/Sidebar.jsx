@@ -54,7 +54,8 @@ export function Sidebar({ open }) {
   const user        = useAuthStore((s) => s.user);
   const setOpen     = useUIStore((s) => s.toggleSidebar);
   const closeSidebar = useUIStore((s) => s.closeSidebar);
-  const isAdmin     = ['admin', 'owner', 'superadmin'].includes(user?.role);
+  const isAdmin      = ['admin', 'owner', 'superadmin'].includes(user?.role);
+  const isSuperAdmin = user?.role === 'superadmin';
 
   return (
     <>
@@ -105,10 +106,12 @@ export function Sidebar({ open }) {
         {/* Nav groups */}
         <nav className="flex-1 px-[9px] py-[2px]" aria-label="Sidebar navigation">
           {NAV_GROUPS.map((group) => {
-            const visibleItems = group.items.filter(
-              (item) => !item.adminOnly || isAdmin,
-            );
-            if (!visibleItems.length) return null;
+            const visibleItems = group.items.filter((item) => {
+                if (item.superOnly) return isSuperAdmin;
+                if (item.adminOnly) return isAdmin;
+                return true;
+              });
+              if (!visibleItems.length || (group.superOnly && !isSuperAdmin)) return null;
             return (
               <div key={group.group}>
                 <p className="text-[9.5px] font-extrabold tracking-[2.8px] uppercase text-text-muted px-[10px] pt-[9px] pb-[2px] opacity-55">
