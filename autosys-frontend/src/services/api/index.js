@@ -25,4 +25,5 @@ export {
   socialApi,
   globalPaymentApi,
   tenantApi,
+  websiteApi,
 } from './global.api';
