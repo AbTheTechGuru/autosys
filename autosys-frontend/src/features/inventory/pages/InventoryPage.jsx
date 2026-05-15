@@ -6,16 +6,16 @@ import { Modal }   from '@/shared/components/ui/Modal';
 import { Input, Select, Field } from '@/shared/components/ui/Input';
 import { SearchBar } from '@/shared/components/ui/Input';
 import { Tabs }    from '@/shared/components/ui/Tabs';
-import { CardGridSkeleton, TableRowSkeleton } from '@/shared/components/ui/Skeleton';
+import { Spinner } from '@/shared/components/ui/Spinner';
 import { EmptyState } from '@/shared/components/feedback/EmptyState';
-import { ResponsiveTable } from '@/shared/components/ui/ResponsiveTable';
+import { TableRowSkeleton } from '@/shared/components/ui/Skeleton';
 import { useToast } from '@/context/ToastContext';
 import { useSalesStore } from '@/store/salesStore';
 import { fmtM, fmtN, fmtMileage } from '@/shared/utils/format';
-import { validate, vehicleSchema, toFuelType, toTrans, toCondition } from '@/schemas';
+import { validate, vehicleSchema } from '@/schemas';
 import { sanitizeObject } from '@/shared/utils/sanitize';
 import { G } from '@/shared/utils/tokens';
-import { FUEL_TYPES, TRANSMISSION, VEHICLE_CONDITION, VEHICLE_STATUS } from '@/shared/constants';
+import { VEHICLE_CONDITION, VEHICLE_STATUS } from '@/shared/constants';
 
 const STATUS_TABS = [
   { key:'All',       label:'All'       },
@@ -24,8 +24,8 @@ const STATUS_TABS = [
   { key:'Sold',      label:'Sold'      },
 ];
 
-/* ── Vehicle detail modal ────────────────────────────────────── */
-function VehicleModal({ vehicle, onClose, onDelete }) {
+/* ── Vehicle detail modal ─────────────────────────────────── */
+function VehicleModal({ vehicle, onClose, onDelete, deleting }) {
   if (!vehicle) return null;
   return (
     <Modal open onClose={onClose} title={vehicle.t} maxWidth={680}>
@@ -35,7 +35,6 @@ function VehicleModal({ vehicle, onClose, onDelete }) {
           <div
             className="rounded-[12px] h-[210px] flex items-center justify-center text-[86px] mb-3"
             style={{ background: `linear-gradient(135deg, ${vehicle.color}bb, ${vehicle.color}44)` }}
-            aria-label={`${vehicle.brand} ${vehicle.model} photo`}
           >
             {vehicle.e}
           </div>
@@ -58,7 +57,10 @@ function VehicleModal({ vehicle, onClose, onDelete }) {
           <div className="font-display text-[26px] font-bold text-gold mb-4">{fmtN(vehicle.price)}</div>
 
           <div className="grid grid-cols-2 gap-2 mb-4">
-            {[['Year',vehicle.year],['Brand',vehicle.brand],['Model',vehicle.model],['Mileage',fmtMileage(vehicle.mileage)],['Fuel',vehicle.fuel_type||vehicle.fuel],['Trans',vehicle.transmission||vehicle.trans],['Condition',vehicle.condition||vehicle.cond]].map(([k,v]) => (
+            {[['Year',vehicle.year],['Brand',vehicle.brand],['Model',vehicle.model],
+              ['Mileage',fmtMileage(vehicle.mileage)],['Fuel',vehicle.fuel_type||vehicle.fuel],
+              ['Trans',vehicle.transmission||vehicle.trans],['Condition',vehicle.condition||vehicle.cond]
+            ].map(([k,v]) => (
               <div key={k} className="bg-surface-3 rounded-[7px] px-[10px] py-2 border border-surface-4">
                 <div className="text-[9.5px] text-text-muted uppercase tracking-[.8px] mb-[1px]">{k}</div>
                 <div className="text-[13px] font-extrabold">{v}</div>
@@ -76,14 +78,11 @@ function VehicleModal({ vehicle, onClose, onDelete }) {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="ok" size="sm" className="flex-1 justify-center" onClick={() => {}}>
-              <Icon name="wa" size={13} />WhatsApp
-            </Button>
             <Button variant="ghost" size="sm" className="flex-1 justify-center">
               <Icon name="edit" size={13} />Edit
             </Button>
-            <Button variant="danger" size="sm" onClick={onDelete}>
-              <Icon name="trash" size={13} />
+            <Button variant="danger" size="sm" onClick={onDelete} disabled={deleting}>
+              {deleting ? <Spinner size={12} /> : <Icon name="trash" size={13} />}
             </Button>
           </div>
         </div>
@@ -92,31 +91,50 @@ function VehicleModal({ vehicle, onClose, onDelete }) {
   );
 }
 
-/* ── Add vehicle modal ────────────────────────────────────────── */
+/* ── Add vehicle modal ────────────────────────────────────── */
 function AddVehicleModal({ open, onClose }) {
   const toast      = useToast();
   const addVehicle = useSalesStore((s) => s.addVehicle);
-  const [form,   setForm]   = useState({ brand:'', model:'', year:'', price:'', mileage:'', fuel_type:'petrol', transmission:'automatic', condition:'foreign_used', status:'available', description:'' });
+  const [form, setForm]     = useState({
+    brand:'', model:'', year:'', price:'', mileage:'',
+    fuel_type:'petrol', transmission:'automatic',
+    condition:'foreign_used', status:'available', description:'',
+  });
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setErrors({});
     const { data, errors: errs } = validate(vehicleSchema, sanitizeObject(form));
     if (errs) { setErrors(errs); return; }
-    addVehicle(data);
-    toast('Vehicle added!');
-    onClose();
-    setForm({ brand:'', model:'', year:'', price:'', mileage:'', fuel_type:'petrol', transmission:'automatic', condition:'foreign_used', status:'available', description:'' });
+    setSaving(true);
+    try {
+      await addVehicle(data);
+      toast('Vehicle added!', 'ok');
+      onClose();
+      setForm({ brand:'', model:'', year:'', price:'', mileage:'', fuel_type:'petrol', transmission:'automatic', condition:'foreign_used', status:'available', description:'' });
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to add vehicle', 'danger');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <Modal open={open} onClose={onClose} title="Add New Vehicle" maxWidth={600}>
       <div className="flex flex-col gap-3">
-<div className="grid grid-cols-2 gap-3">
-          {[['Brand *','brand','Toyota'],['Model *','model','Camry'],['Year *','year','2023'],['Price (₦) *','price','18500000'],['Mileage (km) *','mileage','42000']].map(([l,k,p]) => (
+        <div className="grid grid-cols-2 gap-3">
+          {[['Brand *','brand','Toyota'],['Model *','model','Camry'],['Year *','year','2023'],
+            ['Price (₦) *','price','18500000'],['Mileage (km) *','mileage','42000']
+          ].map(([l,k,p]) => (
             <Field key={k} label={l} error={errors[k]}>
-              <Input placeholder={p} type={['price','mileage','year'].includes(k)?'number':'text'} value={form[k]} onChange={set(k)} />
+              <Input
+                placeholder={p}
+                type={['price','mileage','year'].includes(k) ? 'number' : 'text'}
+                value={form[k]}
+                onChange={set(k)}
+              />
             </Field>
           ))}
           <Field label="Fuel" error={errors.fuel_type}>
@@ -127,30 +145,40 @@ function AddVehicleModal({ open, onClose }) {
               <option value="electric">Electric</option>
             </Select>
           </Field>
+          <Field label="Transmission" error={errors.transmission}>
+            <Select value={form.transmission} onChange={set('transmission')}>
+              <option value="automatic">Automatic</option>
+              <option value="manual">Manual</option>
+            </Select>
+          </Field>
           <Field label="Condition" error={errors.condition}>
             <Select value={form.condition} onChange={set('condition')}>
-              {VEHICLE_CONDITION.map((c) => <option key={c}>{c}</option>)}
+              <option value="foreign_used">Foreign Used</option>
+              <option value="locally_used">Locally Used</option>
+              <option value="brand_new">Brand New</option>
             </Select>
           </Field>
           <Field label="Status" error={errors.status}>
             <Select value={form.status} onChange={set('status')}>
-              {VEHICLE_STATUS.map((s) => <option key={s}>{s}</option>)}
+              <option value="available">Available</option>
+              <option value="reserved">Reserved</option>
+              <option value="sold">Sold</option>
             </Select>
           </Field>
         </div>
 
-        <div
-          className="border-2 border-dashed border-surface-4 rounded-[11px] p-6 text-center cursor-pointer hover:border-gold hover:bg-[rgba(200,151,58,.04)] transition-all"
-          role="button" tabIndex={0} aria-label="Upload vehicle photos"
-        >
-          <Icon name="img" size={20} color="#4E4B58" style={{ margin:'0 auto 7px' }} />
-          <div className="text-[13px] text-text-secondary">Upload vehicle photos (PNG, JPG)</div>
-        </div>
+        <Field label="Description">
+          <Input
+            placeholder="Optional notes about this vehicle…"
+            value={form.description}
+            onChange={set('description')}
+          />
+        </Field>
 
         <div className="flex gap-2 justify-end mt-1">
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="gold" onClick={handleAdd}>
-            <Icon name="plus" size={13} />Add Vehicle
+          <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="gold" onClick={handleAdd} disabled={saving}>
+            {saving ? <><Spinner size={13} />Saving…</> : <><Icon name="plus" size={13} />Add Vehicle</>}
           </Button>
         </div>
       </div>
@@ -158,28 +186,43 @@ function AddVehicleModal({ open, onClose }) {
   );
 }
 
-/* ── Page ─────────────────────────────────────────────────────── */
+/* ── Page ─────────────────────────────────────────────────── */
 export function InventoryPage() {
-  const toast        = useToast();
-  const vehicles     = useSalesStore((s) => s.vehicles);
-  const viewMode     = useSalesStore((s) => s.viewMode);
-  const statusFilter = useSalesStore((s) => s.statusFilter);
-  const searchQuery  = useSalesStore((s) => s.searchQuery);
-  const setViewMode  = useSalesStore((s) => s.setViewMode);
-  const setFilter    = useSalesStore((s) => s.setStatusFilter);
-  const setSearch    = useSalesStore((s) => s.setSearch);
+  const toast         = useToast();
+  const vehicles      = useSalesStore((s) => s.vehicles);
+  const viewMode      = useSalesStore((s) => s.viewMode);
+  const statusFilter  = useSalesStore((s) => s.statusFilter);
+  const searchQuery   = useSalesStore((s) => s.searchQuery);
+  const isLoading     = useSalesStore((s) => s.isLoading);
+  const setViewMode   = useSalesStore((s) => s.setViewMode);
+  const setFilter     = useSalesStore((s) => s.setStatusFilter);
+  const setSearch     = useSalesStore((s) => s.setSearch);
   const removeVehicle = useSalesStore((s) => s.removeVehicle);
   const getFiltered   = useSalesStore((s) => s.getFilteredVehicles);
   const fetchVehicles = useSalesStore((s) => s.fetchVehicles);
 
-  const [addOpen,    setAddOpen]  = useState(false);
+  const [addOpen,   setAddOpen]  = useState(false);
+  const [detailVeh, setDetail]   = useState(null);
+  const [deleting,  setDeleting] = useState(false);
 
-  // Fetch real data on mount; seed data shown immediately for instant UX
   useEffect(() => { fetchVehicles(); }, [fetchVehicles]);
-  const [detailVeh,  setDetail]   = useState(null);
 
-  const filtered = getFiltered();
+  const filtered  = getFiltered();
   const available = vehicles.filter((v) => v.status === 'Available').length;
+
+  const handleDelete = async (vehicle) => {
+    if (!window.confirm(`Delete "${vehicle.t}"? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await removeVehicle(vehicle.id);
+      setDetail(null);
+      toast('Vehicle deleted', 'ok');
+    } catch {
+      toast('Failed to delete vehicle', 'danger');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="max-w-[1500px] px-4 md:px-[22px] pt-[22px]">
@@ -188,12 +231,11 @@ export function InventoryPage() {
         <div>
           <h2 className="font-display text-[23px] font-bold">Inventory</h2>
           <p className="text-text-secondary text-[12.5px] mt-[3px]">
-            {filtered.length} vehicles · {available} available
+            {vehicles.length} vehicles · {available} available
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" size="sm"><Icon name="upload" size={13} />Import CSV</Button>
-          <Button variant="gold"  size="sm" onClick={() => setAddOpen(true)}>
+          <Button variant="gold" size="sm" onClick={() => setAddOpen(true)}>
             <Icon name="plus" size={13} />Add Vehicle
           </Button>
         </div>
@@ -207,11 +249,7 @@ export function InventoryPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-full sm:max-w-[280px]"
         />
-        <Tabs
-          tabs={STATUS_TABS}
-          active={statusFilter}
-          onChange={setFilter}
-        />
+        <Tabs tabs={STATUS_TABS} active={statusFilter} onChange={setFilter} />
         <div className="flex gap-1 ml-auto">
           {[['grid','grid'],['list','list']].map(([v, ic]) => (
             <Button
@@ -228,19 +266,35 @@ export function InventoryPage() {
         </div>
       </div>
 
+      {/* Loading skeleton */}
+      {isLoading && (
+        <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6">
+          {Array(6).fill(0).map((_, i) => (
+            <div key={i} className="bg-surface-2 border border-surface-4 rounded-[14px] overflow-hidden animate-pulse">
+              <div className="h-[142px] bg-surface-3" />
+              <div className="p-[14px]">
+                <div className="h-4 bg-surface-4 rounded w-3/4 mb-2" />
+                <div className="h-5 bg-surface-4 rounded w-1/2 mb-2" />
+                <div className="h-3 bg-surface-4 rounded w-full" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Empty state */}
-      {filtered.length === 0 && (
+      {!isLoading && filtered.length === 0 && (
         <EmptyState
           icon="car"
           title="No vehicles found"
-          desc="Try adjusting your search or filters."
+          desc="Add your first vehicle to get started."
           action={() => setAddOpen(true)}
           actionLabel="Add Vehicle"
         />
       )}
 
       {/* Grid view */}
-      {viewMode === 'grid' && filtered.length > 0 && (
+      {!isLoading && viewMode === 'grid' && filtered.length > 0 && (
         <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6">
           {filtered.map((v) => (
             <article
@@ -263,10 +317,14 @@ export function InventoryPage() {
                 <h3 className="font-extrabold text-[13.5px] mb-1 truncate">{v.t}</h3>
                 <div className="font-display text-[19px] text-gold mb-2">{fmtM(v.price)}</div>
                 <div className="flex gap-2 text-[11.5px] text-text-secondary mb-2">
-                  <span>{v.fuel_type||v.fuel}</span><span>·</span><span>{fmtMileage(v.mileage)}</span><span>·</span><span>{v.condition||v.cond}</span>
+                  <span>{v.fuel_type||v.fuel}</span><span>·</span>
+                  <span>{fmtMileage(v.mileage)}</span><span>·</span>
+                  <span>{v.condition||v.cond}</span>
                 </div>
                 <div className="flex gap-2 text-[10.5px] text-text-muted">
-                  <span>👁 {v.views}</span><span>·</span><span>💬 {v.inq}</span><span>·</span><span>📅 {v.days}d</span>
+                  <span>👁 {v.views}</span><span>·</span>
+                  <span>💬 {v.inq}</span><span>·</span>
+                  <span>📅 {v.days}d</span>
                 </div>
               </div>
             </article>
@@ -275,100 +333,87 @@ export function InventoryPage() {
       )}
 
       {/* List view */}
-      {viewMode === 'list' && filtered.length > 0 && (
+      {!isLoading && viewMode === 'list' && filtered.length > 0 && (
         <>
-        /* ── Mobile card list (md: hidden) ─── */
-        <div className="flex flex-col gap-3 md:hidden mb-6">
-          {isLoading
-            ? Array(4).fill(0).map((_, i) => (
-                <div key={i} className="bg-surface-2 border border-surface-4 rounded-[12px] p-4 animate-pulse">
-                  <div className="h-5 bg-surface-5 rounded w-1/2 mb-2" />
-                  <div className="h-4 bg-surface-4 rounded w-3/4 mb-1" />
-                  <div className="h-4 bg-surface-4 rounded w-1/2" />
-                </div>
-              ))
-            : filtered.map((v) => (
-                <button
-                  key={v.id}
-                  className="bg-surface-2 border border-surface-4 rounded-[12px] p-4 text-left w-full hover:border-[rgba(200,151,58,.22)] transition-colors"
-                  onClick={() => setSelected(v)}
-                >
-                  <div className="flex items-center gap-3 mb-3">
-                    <div
-                      className="w-[46px] h-[46px] rounded-[10px] flex items-center justify-center text-[24px] shrink-0"
-                      style={{ background: `${v.color}33` }}
-                    >
-                      {v.e}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-extrabold text-[14px] truncate">{v.t}</div>
-                      <div className="text-gold font-extrabold text-[13px]">{fmtN(v.price)}</div>
-                    </div>
-                    <Badge>{v.status}</Badge>
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-[11.5px] text-text-secondary">
-                    <span>{v.fuel_type || v.fuel}</span>
-                    <span>·</span>
-                    <span>{fmtMileage(v.mileage)}</span>
-                    <span>·</span>
-                    <span>{v.condition || v.cond}</span>
-                  </div>
-                </button>
-              ))
-          }
-        </div> 
-
-                <div className="hidden md:block border border-surface-4 rounded-[12px] overflow-x-auto mb-6">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                {['Vehicle','Price','Mileage','Fuel','Condition','Status','Views',''].map((h) => (
-                  <th key={h} className="text-left px-[14px] py-[9px] text-[9.5px] font-extrabold uppercase tracking-[1px] text-text-muted bg-surface-3 border-b border-surface-4 first:pl-[18px]">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((v) => (
-                <tr
-                  key={v.id}
-                  className="border-b border-[rgba(33,33,46,.4)] last:border-0 hover:bg-[rgba(255,255,255,.01)] cursor-pointer"
-                  onClick={() => setDetail(v)}
-                >
-                  <td className="px-[18px] py-3">
-                    <div className="flex items-center gap-[9px]">
-                      <span className="text-[22px]">{v.e}</span>
-                      <div>
-                        <div className="font-extrabold text-[13px]">{v.t}</div>
-                        <div className="text-[11px] text-text-muted">{v.year}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-[14px] py-3 text-gold font-extrabold">{fmtM(v.price)}</td>
-                  <td className="px-[14px] py-3 text-text-secondary">{fmtMileage(v.mileage)}</td>
-                  <td className="px-[14px] py-3">{v.fuel_type||v.fuel}</td>
-                  <td className="px-[14px] py-3">{v.condition||v.cond}</td>
-                  <td className="px-[14px] py-3"><Badge>{v.status}</Badge></td>
-                  <td className="px-[14px] py-3 text-text-secondary">{v.views}</td>
-                  <td
-                    className="px-[14px] py-3"
-                    onClick={(e) => e.stopPropagation()}
+          {/* Mobile cards */}
+          <div className="flex flex-col gap-3 md:hidden mb-6">
+            {filtered.map((v) => (
+              <button
+                key={v.id}
+                className="bg-surface-2 border border-surface-4 rounded-[12px] p-4 text-left w-full hover:border-[rgba(200,151,58,.22)] transition-colors"
+                onClick={() => setDetail(v)}
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div
+                    className="w-[46px] h-[46px] rounded-[10px] flex items-center justify-center text-[24px] shrink-0"
+                    style={{ background: `${v.color}33` }}
                   >
-                    <Button
-                      variant="danger"
-                      size="xs"
-                      onClick={() => { removeVehicle(v.id); toast('Vehicle removed', 'danger'); }}
-                      aria-label={`Delete ${v.t}`}
-                    >
-                      <Icon name="trash" size={11} />
-                    </Button>
-                  </td>
+                    {v.e}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-extrabold text-[14px] truncate">{v.t}</div>
+                    <div className="text-gold font-extrabold text-[13px]">{fmtN(v.price)}</div>
+                  </div>
+                  <Badge>{v.status}</Badge>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11.5px] text-text-secondary">
+                  <span>{v.fuel_type||v.fuel}</span><span>·</span>
+                  <span>{fmtMileage(v.mileage)}</span><span>·</span>
+                  <span>{v.condition||v.cond}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block border border-surface-4 rounded-[12px] overflow-x-auto mb-6">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  {['Vehicle','Price','Mileage','Fuel','Condition','Status','Views',''].map((h) => (
+                    <th key={h} className="text-left px-[14px] py-[9px] text-[9.5px] font-extrabold uppercase tracking-[1px] text-text-muted bg-surface-3 border-b border-surface-4 first:pl-[18px]">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filtered.map((v) => (
+                  <tr
+                    key={v.id}
+                    className="border-b border-[rgba(33,33,46,.4)] last:border-0 hover:bg-[rgba(255,255,255,.01)] cursor-pointer"
+                    onClick={() => setDetail(v)}
+                  >
+                    <td className="px-[18px] py-3">
+                      <div className="flex items-center gap-[9px]">
+                        <span className="text-[22px]">{v.e}</span>
+                        <div>
+                          <div className="font-extrabold text-[13px]">{v.t}</div>
+                          <div className="text-[11px] text-text-muted">{v.year}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-[14px] py-3 text-gold font-extrabold">{fmtM(v.price)}</td>
+                    <td className="px-[14px] py-3 text-text-secondary">{fmtMileage(v.mileage)}</td>
+                    <td className="px-[14px] py-3">{v.fuel_type||v.fuel}</td>
+                    <td className="px-[14px] py-3">{v.condition||v.cond}</td>
+                    <td className="px-[14px] py-3"><Badge>{v.status}</Badge></td>
+                    <td className="px-[14px] py-3 text-text-secondary">{v.views}</td>
+                    <td className="px-[14px] py-3" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="danger"
+                        size="xs"
+                        onClick={() => handleDelete(v)}
+                        aria-label={`Delete ${v.t}`}
+                      >
+                        <Icon name="trash" size={11} />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 
@@ -377,11 +422,8 @@ export function InventoryPage() {
       <VehicleModal
         vehicle={detailVeh}
         onClose={() => setDetail(null)}
-        onDelete={() => {
-          removeVehicle(detailVeh.id);
-          setDetail(null);
-          toast('Vehicle removed', 'danger');
-        }}
+        deleting={deleting}
+        onDelete={() => handleDelete(detailVeh)}
       />
     </div>
   );
