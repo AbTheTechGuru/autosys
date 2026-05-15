@@ -119,3 +119,10 @@ export const tenantApi = {
   /** GET /settings/dealer */
   getDealerConfig: () => client.get('/settings/dealer'),
 };
+
+export const websiteApi = {
+  getConfig:    ()     => client.get('/websites/config'),
+  saveConfig:   (body) => client.put('/websites/config', body),
+  publish:      ()     => client.post('/websites/publish'),
+  getAnalytics: ()     => client.get('/websites/analytics'),
+};
