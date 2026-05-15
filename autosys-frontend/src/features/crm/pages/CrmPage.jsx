@@ -46,15 +46,16 @@ function LeadDetail({ lead, onClose }) {
   const toast       = useToast();
   const updateStage = useCrmStore((s) => s.updateStage);
   const addNote     = useCrmStore((s) => s.addNote);
+  const removeLead  = useCrmStore((s) => s.removeLead);
 
   const [aiLoad, setAiLoad]     = useState(false);
   const [followUp, setFollowUp] = useState('');
   const [note, setNote]         = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const generateFollowUp = async () => {
     setAiLoad(true);
     try {
-      // Calls backend /api/ai/followup — backend fetches lead from DB
       const { data } = await aiApi.followup(lead.id);
       setFollowUp(data.text);
     } catch (err) {
@@ -63,20 +64,38 @@ function LeadDetail({ lead, onClose }) {
     setAiLoad(false);
   };
 
-  const handleAddNote = () => {
+  const handleAddNote = async () => {
     if (!note.trim()) return;
-    addNote(lead.id, note);
+    await addNote(lead.id, note);
     setNote('');
-    toast('Note saved!');
+    toast('Note saved!', 'ok');
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete lead "${lead.name}"? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await removeLead(lead.id);
+      toast('Lead deleted', 'ok');
+      onClose();
+    } catch (err) {
+      toast('Failed to delete lead', 'danger');
+      setDeleting(false);
+    }
   };
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
       <div className="flex items-center justify-between px-[17px] py-[14px] border-b border-surface-4 shrink-0">
         <span className="font-display text-[17px] font-bold">Lead Detail</span>
-        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
-          <Icon name="x" size={13} />
-        </Button>
+        <div className="flex gap-1">
+          <Button variant="ghost" size="icon" onClick={handleDelete} disabled={deleting} aria-label="Delete lead">
+            {deleting ? <Spinner size={12} /> : <Icon name="trash" size={13} color="#F87171" />}
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+            <Icon name="x" size={13} />
+          </Button>
+        </div>
       </div>
 
       <div className="px-[17px] py-[14px] border-b border-surface-4">
@@ -176,16 +195,24 @@ function AddLeadModal({ open, onClose }) {
   const addLead = useCrmStore((s) => s.addLead);
   const [form, setForm]     = useState({ name:'', phone:'', email:'', vehicle_interest:'', budget:'', source:'website', stage:'new' });
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setErrors({});
     const { data, errors: errs } = validate(leadSchema, sanitizeObject(form));
     if (errs) { setErrors(errs); return; }
-    addLead(data);
-    toast('Lead added!');
-    onClose();
-    setForm({ name:'', phone:'', email:'', vehicle_interest:'', budget:'', source:'website', stage:'new' });
+    setSaving(true);
+    try {
+      await addLead(data);
+      toast('Lead added!', 'ok');
+      onClose();
+      setForm({ name:'', phone:'', email:'', vehicle_interest:'', budget:'', source:'website', stage:'new' });
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to add lead', 'danger');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -214,8 +241,10 @@ function AddLeadModal({ open, onClose }) {
           </Field>
         </div>
         <div className="flex gap-2 justify-end mt-1">
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="gold" onClick={handleAdd}><Icon name="plus" size={13} />Add Lead</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="gold" onClick={handleAdd} disabled={saving}>
+            {saving ? <><Spinner size={13} />Saving…</> : <><Icon name="plus" size={13} />Add Lead</>}
+          </Button>
         </div>
       </div>
     </Modal>
@@ -285,11 +314,9 @@ export function CrmPage() {
         <div>
           {filtered.length === 0 && !isLoading ? (
             <EmptyState icon="phone" title="No leads found" desc="Add your first lead or adjust filters." action={() => setAddOpen(true)} actionLabel="Add Lead" />
-
-// Mobile leads cards
           ) : ( 
             <>
-
+          /* ── Mobile lead cards ─── */
             <div className="flex flex-col gap-3 md:hidden">
               {isLoading
                 ? Array(4).fill(0).map((_, i) => (
