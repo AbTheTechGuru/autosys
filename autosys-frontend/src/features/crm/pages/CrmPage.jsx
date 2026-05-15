@@ -285,10 +285,10 @@ export function CrmPage() {
         <div>
           {filtered.length === 0 && !isLoading ? (
             <EmptyState icon="phone" title="No leads found" desc="Add your first lead or adjust filters." action={() => setAddOpen(true)} actionLabel="Add Lead" />
+
+// Mobile leads cards
           ) : ( 
             <>
-
-  // Mobile lead cards
 
             <div className="flex flex-col gap-3 md:hidden">
               {isLoading
