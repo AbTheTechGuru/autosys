@@ -287,7 +287,7 @@ export function CrmPage() {
             <EmptyState icon="phone" title="No leads found" desc="Add your first lead or adjust filters." action={() => setAddOpen(true)} actionLabel="Add Lead" />
           ) : ( 
             <>
-          /* ── Mobile lead cards ─── */
+          //* ── Mobile lead cards ─── */
             <div className="flex flex-col gap-3 md:hidden">
               {isLoading
                 ? Array(4).fill(0).map((_, i) => (
