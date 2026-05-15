@@ -47,11 +47,6 @@ function BlogAdminSection() {
           { label:'Total Views',     value: totalViews.toLocaleString(),        color:G.bl, icon:'eye'      },
           { label:'Draft Posts',     value: DEMO_POSTS.filter(p=>p.status==='draft').length, color:G.wa, icon:'note' },
           { label:'Avg. Read Time',  value: `${Math.round(DEMO_POSTS.reduce((s,p)=>s+p.read_time,0)/DEMO_POSTS.length)}m`, color:G.pu, icon:'activity' },
-        ].map(([label, value, color, icon] = Object.values(x), x) => null) || [
-          { label:'Published Posts', value: published,                                                                        color:G.ok, icon:'check'    },
-          { label:'Total Views',     value: totalViews.toLocaleString(),                                                       color:G.bl, icon:'eye'      },
-          { label:'Draft Posts',     value: DEMO_POSTS.filter(p=>p.status==='draft').length,                                   color:G.wa, icon:'note'     },
-          { label:'Avg. Read Time',  value: `${Math.round(DEMO_POSTS.reduce((s,p)=>s+p.read_time,0)/DEMO_POSTS.length)}m`,    color:G.pu, icon:'activity' },
         ].map(({ label, value, color, icon }) => (
           <div key={label} className="bg-surface-2 border border-surface-4 rounded-[14px] p-[18px]">
             <div className="flex justify-between items-start mb-2">
