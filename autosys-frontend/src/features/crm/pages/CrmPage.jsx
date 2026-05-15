@@ -288,7 +288,7 @@ export function CrmPage() {
           ) : ( 
             <>
 
-  // ── Mobile lead cards ─── 
+  // Mobile lead cards
 
             <div className="flex flex-col gap-3 md:hidden">
               {isLoading
