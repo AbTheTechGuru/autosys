@@ -213,6 +213,8 @@ function IntegrationsTab() {
 /* ── Billing tab ─────────────────────────────────────────────── */
 function BillingTab() {
   const toast = useToast();
+  // FIX: user was referenced without being fetched — caused "user is not defined" crash
+  const user  = useAuthStore((s) => s.user);
   return (
     <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-[22px]">
       <h3 className="font-display text-[19px] font-bold mb-5">Plan &amp; Billing</h3>
