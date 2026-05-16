@@ -11,7 +11,7 @@
 export { default as client, getToken, setToken, clearToken } from './client';
 export { authApi }      from './auth.api';
 export { crmApi }       from './crm.api';
-export { salesApi }     from './sales.api';
+export { salesApi, vehicleImageApi } from './sales.api';
 export { analyticsApi } from './analytics.api';
 export { marketingApi } from './marketing.api';
 export { adminApi }     from './admin.api';
@@ -26,4 +26,5 @@ export {
   globalPaymentApi,
   tenantApi,
   websiteApi,
+  adminApi,
 } from './global.api';
