@@ -41,6 +41,13 @@ export const automationApi = {
   /** POST /automations/test-trigger */
   testTrigger: (trigger, payload = {}) =>
     client.post('/automations/test-trigger', { trigger, payload }),
+
+  // ── Friendly aliases used by AutomationPage ───────────────
+  getAutomations:      ()          => client.get('/automations'),
+  createAutomation:    (data)      => client.post('/automations', data),
+  updateAutomation:    (id, data)  => client.put(`/automations/${id}`, data),
+  deleteAutomation:    (id)        => client.delete(`/automations/${id}`),
+  toggleAutomation:    (id, enabled) => client.patch(`/automations/${id}`, { enabled }),
 };
 
 /* ── Calendar + Tasks API ───────────────────────────────────── */
@@ -118,11 +125,4 @@ export const tenantApi = {
 
   /** GET /settings/dealer */
   getDealerConfig: () => client.get('/settings/dealer'),
-};
-
-export const websiteApi = {
-  getConfig:    ()     => client.get('/websites/config'),
-  saveConfig:   (body) => client.put('/websites/config', body),
-  publish:      ()     => client.post('/websites/publish'),
-  getAnalytics: ()     => client.get('/websites/analytics'),
 };
