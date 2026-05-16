@@ -26,9 +26,36 @@ const STATUS_TABS = [
 
 /* ── Vehicle detail modal ─────────────────────────────────── */
 function VehicleModal({ vehicle, onClose, onDelete, deleting }) {
+  const [photoTab, setPhotoTab] = useState(false);
   if (!vehicle) return null;
   return (
     <Modal open onClose={onClose} title={vehicle.t} maxWidth={680}>
+      {/* Tab switcher */}
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setPhotoTab(false)}
+          className={`px-3 py-1.5 rounded-[7px] text-[12px] font-bold transition-colors ${!photoTab ? 'bg-gold text-[#0A0812]' : 'text-text-muted hover:bg-surface-3'}`}
+        >
+          Details
+        </button>
+        <button
+          onClick={() => setPhotoTab(true)}
+          className={`px-3 py-1.5 rounded-[7px] text-[12px] font-bold transition-colors ${photoTab ? 'bg-gold text-[#0A0812]' : 'text-text-muted hover:bg-surface-3'}`}
+        >
+          📸 Photos {vehicle.image_urls?.length > 0 ? `(${vehicle.image_urls.length})` : ''}
+        </button>
+      </div>
+
+      {/* Photos tab */}
+      {photoTab && (
+        <VehicleImageUploader
+          vehicleId={vehicle.id}
+          existingUrls={vehicle.image_urls || []}
+        />
+      )}
+
+      {/* Details tab */}
+      {!photoTab && (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {/* Photo */}
         <div>
@@ -87,6 +114,7 @@ function VehicleModal({ vehicle, onClose, onDelete, deleting }) {
           </div>
         </div>
       </div>
+      )} {/* end details tab */}
     </Modal>
   );
 }
@@ -425,6 +453,126 @@ export function InventoryPage() {
         deleting={deleting}
         onDelete={() => handleDelete(detailVeh)}
       />
+    </div>
+  );
+}
+
+/* ─── VehicleImageUploader ──────────────────────────────────── */
+// Add this inside InventoryPage.jsx after the existing imports.
+// It is used inside VehicleModal to manage photos.
+
+export function VehicleImageUploader({ vehicleId, existingUrls = [], onUpdated }) {
+  const toast   = useToast();
+  const updateV = useSalesStore((s) => s.updateVehicle);
+
+  const [urls,       setUrls]       = useState(existingUrls);
+  const [uploading,  setUploading]  = useState(false);
+  const [deleting,   setDeleting]   = useState(null); // url being deleted
+
+  const handleFiles = async (files) => {
+    if (!files?.length) return;
+    const allowed = Array.from(files).filter((f) => f.type.startsWith('image/')).slice(0, 10 - urls.length);
+    if (!allowed.length) { toast('Only image files are allowed', 'warning'); return; }
+
+    setUploading(true);
+    try {
+      // Convert each file to base64
+      const images = await Promise.all(
+        allowed.map((file) =>
+          new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload  = () => resolve({ base64: reader.result, type: file.type, name: file.name });
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          }),
+        ),
+      );
+
+      const { vehicleImageApi } = await import('@/services/api');
+      const { data } = await vehicleImageApi.uploadImages(vehicleId, images);
+      const newUrls = data.urls || [];
+      const merged  = [...urls, ...newUrls];
+      setUrls(merged);
+      updateV(vehicleId, { image_urls: merged });
+      onUpdated?.(merged);
+      toast(`${newUrls.length} photo${newUrls.length > 1 ? 's' : ''} uploaded!`, 'ok');
+    } catch (err) {
+      toast(err.response?.data?.message || 'Upload failed', 'danger');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDelete = async (url) => {
+    setDeleting(url);
+    try {
+      const { vehicleImageApi } = await import('@/services/api');
+      await vehicleImageApi.deleteImage(vehicleId, url);
+      const filtered = urls.filter((u) => u !== url);
+      setUrls(filtered);
+      updateV(vehicleId, { image_urls: filtered });
+      onUpdated?.(filtered);
+      toast('Photo removed', 'ok');
+    } catch {
+      toast('Failed to remove photo', 'danger');
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    handleFiles(e.dataTransfer.files);
+  };
+
+  return (
+    <div>
+      <p className="text-[11px] font-extrabold uppercase tracking-[1.8px] text-text-muted mb-2">
+        Photos ({urls.length}/10)
+      </p>
+
+      {/* Existing photos grid */}
+      {urls.length > 0 && (
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-3">
+          {urls.map((url) => (
+            <div key={url} className="relative group rounded-[8px] overflow-hidden aspect-square bg-surface-3">
+              <img src={url} alt="Vehicle" className="w-full h-full object-cover" />
+              <button
+                onClick={() => handleDelete(url)}
+                disabled={!!deleting}
+                className="absolute top-1 right-1 w-[22px] h-[22px] rounded-full bg-black/70 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+              >
+                {deleting === url
+                  ? <span className="w-2 h-2 border border-white border-t-transparent rounded-full animate-spin" />
+                  : <span className="text-white text-[10px] font-bold">×</span>
+                }
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Drop zone */}
+      {urls.length < 10 && (
+        <label
+          onDrop={handleDrop}
+          onDragOver={(e) => e.preventDefault()}
+          className="flex flex-col items-center justify-center border-2 border-dashed border-surface-4 rounded-[10px] py-5 px-4 cursor-pointer hover:border-gold transition-colors"
+        >
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => handleFiles(e.target.files)}
+            disabled={uploading}
+          />
+          {uploading
+            ? <><span className="w-5 h-5 border-2 border-gold border-t-transparent rounded-full animate-spin mb-2" /><span className="text-[12px] text-gold font-bold">Uploading…</span></>
+            : <><span className="text-[26px] mb-1">📸</span><span className="text-[12.5px] font-bold text-text-secondary">Click or drag photos here</span><span className="text-[11px] text-text-muted mt-1">JPG, PNG, WEBP · max 10 photos</span></>
+          }
+        </label>
+      )}
     </div>
   );
 }
