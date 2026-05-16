@@ -104,3 +104,90 @@ router.post('/bulk', requireRole(['owner', 'admin']), async (req, res) => {
 
 module.exports = router;
 module.exports.publicListing = publicListing;
+
+// ── POST /vehicles/:id/images — upload photos ─────────────────
+// Uses Supabase Storage. Accepts base64 or multipart via body.
+// Frontend sends: { images: [{ name, base64, type }] }
+router.post('/:id/images', async (req, res) => {
+  const { id } = req.params;
+  const { images } = req.body;
+
+  // Confirm vehicle belongs to dealer
+  const { data: vehicle, error: fetchErr } = await supabase
+    .from('vehicles').select('id, image_urls')
+    .eq('id', id).eq('dealer_id', req.auth.dealerId).single();
+  if (fetchErr || !vehicle) throw new NotFoundError('Vehicle');
+
+  if (!Array.isArray(images) || images.length === 0) {
+    return res.status(400).json({ message: 'No images provided' });
+  }
+
+  const uploadedUrls = [];
+
+  for (const img of images.slice(0, 10)) {
+    try {
+      const ext      = (img.type || 'image/jpeg').split('/')[1] || 'jpg';
+      const fileName = `${req.auth.dealerId}/${id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const buffer   = Buffer.from(img.base64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+
+      const { error: upErr } = await supabase.storage
+        .from('vehicle-images')
+        .upload(fileName, buffer, {
+          contentType: img.type || 'image/jpeg',
+          upsert: false,
+        });
+
+      if (upErr) {
+        logger.warn({ error: upErr.message, fileName }, 'Image upload failed');
+        continue;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('vehicle-images')
+        .getPublicUrl(fileName);
+
+      if (urlData?.publicUrl) uploadedUrls.push(urlData.publicUrl);
+    } catch (e) {
+      logger.warn({ error: e.message }, 'Image processing failed');
+    }
+  }
+
+  if (uploadedUrls.length === 0) {
+    return res.status(500).json({ message: 'All image uploads failed' });
+  }
+
+  // Append new URLs to existing image_urls
+  const merged = [...(vehicle.image_urls || []), ...uploadedUrls];
+  const { data: updated, error: updateErr } = await supabase
+    .from('vehicles')
+    .update({ image_urls: merged, updated_at: new Date().toISOString() })
+    .eq('id', id).eq('dealer_id', req.auth.dealerId)
+    .select().single();
+
+  if (updateErr) throw updateErr;
+
+  logger.info({ dealerId: req.auth.dealerId, vehicleId: id, count: uploadedUrls.length }, 'Vehicle images uploaded');
+  res.json({ vehicle: updated, uploaded: uploadedUrls.length, urls: uploadedUrls });
+});
+
+// ── DELETE /vehicles/:id/images — remove a photo ─────────────
+router.delete('/:id/images', async (req, res) => {
+  const { id } = req.params;
+  const { url } = req.body;
+
+  const { data: vehicle } = await supabase
+    .from('vehicles').select('id, image_urls')
+    .eq('id', id).eq('dealer_id', req.auth.dealerId).single();
+  if (!vehicle) throw new NotFoundError('Vehicle');
+
+  const filtered = (vehicle.image_urls || []).filter((u) => u !== url);
+
+  const { data: updated, error } = await supabase
+    .from('vehicles')
+    .update({ image_urls: filtered, updated_at: new Date().toISOString() })
+    .eq('id', id).eq('dealer_id', req.auth.dealerId)
+    .select().single();
+
+  if (error) throw error;
+  res.json({ vehicle: updated });
+});
