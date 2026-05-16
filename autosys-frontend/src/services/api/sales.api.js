@@ -20,3 +20,13 @@ export const salesApi = {
   // Commission
   getCommissions: (period) => client.get('/commissions', { params: { period } }),
 };
+
+export const vehicleImageApi = {
+  // Upload images — sends base64 array to backend
+  uploadImages: (vehicleId, images) =>
+    client.post(`/vehicles/${vehicleId}/images`, { images }),
+
+  // Remove one image URL
+  deleteImage: (vehicleId, url) =>
+    client.delete(`/vehicles/${vehicleId}/images`, { data: { url } }),
+};
