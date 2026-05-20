@@ -1,190 +1,174 @@
-import { useEffect, useState } from 'react';
-import { Button }  from '@/shared/components/ui/Button';
+import { useEffect, useState, useCallback } from 'react';
 import { Icon }    from '@/shared/components/ui/Icon';
+import { Spinner } from '@/shared/components/ui/Spinner';
 import { LiveDot } from '@/shared/components/ui/LiveDot';
 import { fmtM }   from '@/shared/utils/format';
 import { G }      from '@/shared/utils/tokens';
 import { cn }     from '@/shared/utils/cn';
+import { analyticsApi } from '@/services/api/index';
+import { useToast } from '@/context/ToastContext';
+
+// TODO: Connect to backend endpoint when available
+// Expected endpoint: GET /activity?limit=50&type=all
+// Expected response: { events: [{ id, type, icon, title, desc, created_at }] }
+// Expected endpoint: GET /activity/stats?period=today
+// Expected response: { events_today, leads_today, revenue_today, active_users }
 
 const SEED = [
-  { id:1, type:'lead',    icon:'phone', title:'New lead captured',         desc:'Adeola Benson – BMW X5 via website',     time:'Just now', color:G.bl },
-  { id:2, type:'pay',     icon:'pay',   title:'Payment confirmed ✓',       desc:'₦42M – Biodun Adeyemi – Lexus RX 350',   time:'2m ago',   color:G.ok },
-  { id:3, type:'deal',    icon:'bars',  title:'Deal stage updated',         desc:'Amaka moved → Payment stage',            time:'5m ago',   color:G.g  },
-  { id:4, type:'vehicle', icon:'car',   title:'Vehicle listed',             desc:'2024 BMW X5 at ₦89M',                   time:'12m ago',  color:G.wa },
-  { id:5, type:'ai',      icon:'ai',    title:'AI description generated',   desc:'BMW X5 listing copy applied',            time:'18m ago',  color:G.pu },
-  { id:6, type:'pay',     icon:'pay',   title:'Subscription renewed',       desc:'Pro Plan – ₦15,000 charged',            time:'1h ago',   color:G.g  },
-  { id:7, type:'view',    icon:'eye',   title:'Website traffic spike',      desc:'GLE 450 viewed 8 times from Lagos',      time:'2h ago',   color:G.te },
+  { id:1, type:'lead',    icon:'phone', title:'New lead captured',       desc:'Adeola Benson – BMW X5 via website',   time:'Just now', color:G.bl },
+  { id:2, type:'pay',     icon:'pay',   title:'Payment confirmed ✓',     desc:'₦42M – Biodun Adeyemi – Lexus RX 350', time:'2m ago',   color:G.ok },
+  { id:3, type:'deal',    icon:'bars',  title:'Deal stage updated',       desc:'Amaka moved → Payment stage',          time:'5m ago',   color:G.g  },
+  { id:4, type:'vehicle', icon:'car',   title:'Vehicle listed',           desc:'2024 BMW X5 at ₦89M',                 time:'12m ago',  color:G.wa },
+  { id:5, type:'ai',      icon:'ai',    title:'AI description generated', desc:'BMW X5 listing copy applied',          time:'18m ago',  color:G.pu },
 ];
 
 const NEW_EVENTS = [
   { type:'lead', icon:'phone', title:'New WhatsApp inquiry', desc:'Musa Ibrahim – Toyota Camry', color:G.bl },
-  { type:'view', icon:'eye',   title:'Traffic spike',        desc:'14 visitors in last 5 minutes', color:G.te },
-  { type:'deal', icon:'bars',  title:'Follow-up overdue',    desc:'Chukwudi Eze – 1 day overdue', color:G.wa },
+  { type:'view', icon:'eye',   title:'Traffic spike',        desc:'14 visitors in last 5 minutes', color:G.wa },
+  { type:'deal', icon:'bars',  title:'Follow-up overdue',    desc:'Chukwudi Eze – 1 day overdue', color:G.g },
 ];
 
 const FILTERS = ['all','lead','pay','deal','vehicle','ai','view'];
 
-export function ActivityPage() {
-  const [events,  setEvents]  = useState(SEED);
-  const [paused,  setPaused]  = useState(false);
-  const [filter,  setFilter]  = useState('all');
+function relativeTime(ts) {
+  const diff = (Date.now() - new Date(ts)) / 1000;
+  if (diff < 60)    return 'Just now';
+  if (diff < 3600)  return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  return new Date(ts).toLocaleDateString('en-NG', { month:'short', day:'numeric' });
+}
 
+export function ActivityPage() {
+  const toast = useToast();
+  const [events,    setEvents]  = useState(SEED);
+  const [stats,     setStats]   = useState(null);
+  const [paused,    setPaused]  = useState(false);
+  const [filter,    setFilter]  = useState('all');
+  const [isLoading, setIsLoading] = useState(true);
+
+  /* ── Fetch real activity + overview stats ────────────────── */
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { data } = await analyticsApi.overview('7d');
+      setStats(data);
+    } catch { /* keep derived from seed */ } finally {
+      setIsLoading(false);
+    }
+
+    // TODO: Replace with real activity feed when endpoint is ready
+    // try {
+    //   const { data } = await client.get('/activity', { params: { limit: 50 } });
+    //   if (data.events?.length > 0) setEvents(data.events.map(e => ({
+    //     ...e, time: relativeTime(e.created_at), color: TYPE_COLOR[e.type] || G.t1
+    //   })));
+    // } catch {}
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  /* ── Simulated live feed (replace with WebSocket when ready) */
+  // TODO: Replace interval with WebSocket connection when available
+  // Expected: ws://api.autosys.app/ws?token=...
+  // Expected messages: { type: 'activity', event: { id, type, title, desc } }
   useEffect(() => {
     if (paused) return;
     const interval = setInterval(() => {
       const ev = NEW_EVENTS[Math.floor(Math.random() * NEW_EVENTS.length)];
-      setEvents((es) => [{ ...ev, id: Date.now(), time: 'Just now' }, ...es.slice(0, 19)]);
+      setEvents((es) => [{ ...ev, id: Date.now(), time:'Just now' }, ...es.slice(0, 49)]);
     }, 9000);
     return () => clearInterval(interval);
   }, [paused]);
 
   const filtered = filter === 'all' ? events : events.filter((e) => e.type === filter);
 
-  const stats = [
-    { label:'Events Today', value:'284',         color:G.g,  icon:'activity' },
-    { label:'Leads Today',  value:'14',          color:G.bl, icon:'phone'    },
-    { label:'Revenue Today',value:fmtM(18500000),color:G.ok, icon:'pay'      },
-    { label:'Active Users', value:'4',           color:G.pu, icon:'users'    },
+  const statCards = [
+    { label:'Events Today', value: stats ? String(stats.leads_total ?? '—') : '—',       color:G.g,  icon:'activity' },
+    { label:'Leads Today',  value: stats ? String(stats.leads_new ?? '—')   : '—',       color:G.bl, icon:'phone'    },
+    { label:'Revenue Today',value: stats ? fmtM(Math.round((stats.revenue ?? 0)/100)) : '—', color:G.ok, icon:'pay' },
+    { label:'Active Users', value:'—',                                                    color:G.pu, icon:'users'    },
   ];
 
   return (
-    <div className="max-w-[1500px] px-4 md:px-[22px] pt-[22px] pb-8">
+    <div className="max-w-[1100px] px-4 md:px-[22px] pt-[22px] pb-[88px] md:pb-[22px]">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div>
-          <h2 className="font-display text-[23px] font-bold flex items-center gap-[10px]">
-            Live Activity Feed
-            <div className="flex items-center gap-[5px] px-[10px] py-[3px] rounded-[20px] border" style={{ background:'rgba(22,163,74,.12)', borderColor:'rgba(22,163,74,.28)' }}>
-              <LiveDot /><span className="text-[11px] text-status-ok font-bold">LIVE</span>
-            </div>
+          <h2 className="font-display text-[23px] font-bold flex items-center gap-3">
+            <LiveDot /> Activity Feed
           </h2>
-          <p className="text-text-secondary text-[12.5px] mt-[3px]">Real-time events · updating every 9s</p>
+          <p className="text-text-secondary text-[12.5px] mt-[3px]">
+            Real-time events across your dealership
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant={paused ? 'gold' : 'ghost'} size="sm" onClick={() => setPaused(!paused)}>
-            {paused ? '▶ Resume' : '⏸ Pause'}
-          </Button>
-          <Button variant="ghost" size="sm"><Icon name="dl" size={13} />Export</Button>
-        </div>
+        <button
+          onClick={() => setPaused((p) => !p)}
+          className={cn(
+            'flex items-center gap-1.5 px-3 py-[6px] rounded-[8px] text-[11.5px] font-bold transition-colors border',
+            paused
+              ? 'border-gold bg-[rgba(200,151,58,.1)] text-gold'
+              : 'border-surface-4 bg-surface-2 text-text-muted hover:border-surface-5'
+          )}>
+          <Icon name={paused ? 'play' : 'pause'} size={12} color={paused ? '#C8973A' : '#4E4B58'} />
+          {paused ? 'Resume' : 'Pause feed'}
+        </button>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        {stats.map(({ label, value, color, icon }) => (
-          <div key={label} className="bg-surface-2 border border-surface-4 rounded-[14px] p-[18px]">
-            <div className="flex justify-between items-start mb-2">
-              <Icon name={icon} size={18} color={color} />
-              <LiveDot />
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        {statCards.map((s) => (
+          <div key={s.label} className="bg-surface-2 border border-surface-4 rounded-[14px] p-[16px]">
+            <div className="flex items-center gap-2 mb-2">
+              <Icon name={s.icon} size={13} color={s.color} />
+              <span className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider">{s.label}</span>
             </div>
-            <div className="font-display text-[24px] font-bold" style={{ color }}>{value}</div>
-            <div className="text-[11px] text-text-secondary">{label}</div>
+            {isLoading
+              ? <div className="h-7 w-16 bg-surface-3 rounded animate-pulse" />
+              : <div className="font-display text-[22px] font-bold" style={{ color:s.color }}>{s.value}</div>
+            }
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
-        {/* Event stream */}
-        <div className="bg-surface-2 border border-surface-4 rounded-[14px] overflow-hidden">
-          <div className="px-[18px] py-[14px] border-b border-surface-4 flex gap-2 flex-wrap items-center">
-            <div className="font-display text-[17px] font-bold flex-1">Event Stream</div>
-            {FILTERS.map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={cn(
-                  'text-[11px] font-extrabold uppercase px-[8px] py-[3px] rounded-[7px] border cursor-pointer transition-all capitalize',
-                  filter === f
-                    ? 'border-gold text-surface-bg btn-gold'
-                    : 'border-surface-4 text-text-secondary bg-transparent hover:bg-surface-3',
-                )}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-          <div className="max-h-[520px] overflow-y-auto" role="log" aria-live="polite" aria-label="Activity feed">
-            {filtered.map((ev, i) => (
-              <div
-                key={ev.id}
-                className="flex gap-[9px] items-start px-[18px] py-3 border-b border-[rgba(33,33,46,.3)] last:border-0"
-                style={{ animation: i === 0 && !paused ? 'up .4s ease' : 'none' }}
-              >
-                <div
-                  className="w-[32px] h-[32px] rounded-[8px] flex items-center justify-center shrink-0 border"
-                  style={{ background:`${ev.color}18`, borderColor:`${ev.color}22` }}
-                >
-                  <Icon name={ev.icon} size={14} color={ev.color} />
-                </div>
-                <div className="flex-1">
-                  <div className="text-[13px] font-bold">{ev.title}</div>
-                  <div className="text-[12px] text-text-secondary">{ev.desc}</div>
-                  <div className="text-[10.5px] text-text-muted mt-[2px]">{ev.time}</div>
-                </div>
-                <div className="w-[6px] h-[6px] rounded-full shrink-0 mt-[6px] opacity-60" style={{ background:ev.color }} />
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Filter chips */}
+      <div className="flex gap-1.5 mb-4 flex-wrap">
+        {FILTERS.map((f) => (
+          <button key={f} onClick={() => setFilter(f)}
+            className={cn(
+              'px-3 py-[5px] text-[11px] font-bold rounded-[7px] capitalize transition-colors',
+              filter === f ? 'bg-gold text-[#0A0812]' : 'text-text-muted hover:text-text-primary hover:bg-surface-3'
+            )}>
+            {f}
+          </button>
+        ))}
+      </div>
 
-        {/* Side panels */}
-        <div className="flex flex-col gap-4">
-          {/* Hourly chart */}
-          <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-[18px]">
-            <div className="font-display text-[17px] font-bold mb-3">Events by Hour</div>
-            <div className="flex items-end gap-[2px] h-[80px]">
-              {[3,8,12,18,25,32,28,14,22,38,45,62,58,44,38,29,42,55,48,36,22,14,8,4].map((v, i) => (
-                <div
-                  key={i}
-                  className="flex-1 rounded-t-[2px]"
-                  style={{
-                    height: `${(v / 62) * 100}%`,
-                    background: i >= 8 && i <= 17
-                      ? `linear-gradient(to top,${G.gd},${G.g})`
-                      : `linear-gradient(to top,${G.s5},${G.s6})`,
-                    minHeight: 2,
-                  }}
-                />
-              ))}
+      {/* Feed */}
+      <div className="space-y-2">
+        {filtered.map((ev) => (
+          <div key={ev.id}
+            className="group flex items-start gap-3 bg-surface-1 border border-surface-4 rounded-[12px] px-4 py-3 transition-all hover:border-surface-5"
+            style={{ animation:'up .35s ease both' }}>
+            <div className="w-[30px] h-[30px] rounded-[8px] flex items-center justify-center shrink-0 border"
+              style={{ background:`${ev.color}16`, borderColor:`${ev.color}22` }}>
+              <Icon name={ev.icon} size={13} color={ev.color} />
             </div>
-            <div className="flex justify-between mt-1 text-[9.5px] text-text-muted">
-              <span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12.5px] font-bold text-text-primary">{ev.title}</p>
+              <p className="text-[11.5px] text-text-secondary mt-[2px]">{ev.desc}</p>
             </div>
+            <span className="text-[10px] text-text-muted shrink-0 pt-0.5 whitespace-nowrap">
+              {ev.created_at ? relativeTime(ev.created_at) : ev.time}
+            </span>
           </div>
+        ))}
 
-          {/* Top sources */}
-          <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-[18px]">
-            <div className="font-display text-[17px] font-bold mb-4">Top Sources Today</div>
-            {[['WhatsApp','47 events','#25D366'],['Website','38 events',G.bl],['Instagram','22 events','#E1306C'],['Referrals','14 events',G.g],['Facebook','9 events','#1877F2']].map(([s,v,c]) => (
-              <div key={s} className="flex justify-between items-center mb-[10px]">
-                <div className="flex items-center gap-[7px]">
-                  <div className="w-[8px] h-[8px] rounded-full" style={{ background:c }} />
-                  <span className="text-[13px] text-text-secondary">{s}</span>
-                </div>
-                <span className="text-[12px] font-bold" style={{ color:c }}>{v}</span>
-              </div>
-            ))}
+        {filtered.length === 0 && (
+          <div className="text-center py-12 text-text-muted">
+            <Icon name="activity" size={28} color="#4E4B58" />
+            <p className="text-[13px] font-semibold mt-3">No events for this filter</p>
           </div>
-
-          {/* Online now */}
-          <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-[18px]">
-            <div className="font-display text-[17px] font-bold mb-3">Online Now</div>
-            {[['Sarah K.','Sales Agent',G.ok],['John D.','Sales Agent',G.ok],['Mike A.','Sales Agent',G.wa],['You','Admin',G.ok]].map(([name,role,c]) => (
-              <div key={name} className="flex items-center gap-[9px] mb-[10px]">
-                <div
-                  className="w-[28px] h-[28px] rounded-[7px] flex items-center justify-center font-extrabold text-[10px] shrink-0"
-                  style={{ background:'linear-gradient(135deg,#8B5E18,#C8973A)', color:'#07070B' }}
-                >
-                  {name.split(' ').map((n) => n[0]).join('')}
-                </div>
-                <div className="flex-1">
-                  <div className="text-[13px] font-semibold">{name}</div>
-                  <div className="text-[11px] text-text-muted">{role}</div>
-                </div>
-                <div className="w-[7px] h-[7px] rounded-full" style={{ background:c, boxShadow: c===G.ok?`0 0 6px ${G.ok}`:'none' }} />
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
