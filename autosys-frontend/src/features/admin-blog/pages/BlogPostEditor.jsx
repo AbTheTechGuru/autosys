@@ -1,102 +1,77 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Button }  from '@/shared/components/ui/Button';
 import { Icon }    from '@/shared/components/ui/Icon';
 import { Toggle }  from '@/shared/components/ui/Toggle';
+import { Spinner } from '@/shared/components/ui/Spinner';
 import { useToast } from '@/context/ToastContext';
-import { G }       from '@/shared/utils/tokens';
-import { DEMO_POSTS, DEMO_CATEGORIES } from '@/store/blogStore';
+import { useBlogStore } from '@/store/blogStore';
+import { G } from '@/shared/utils/tokens';
+import { cn } from '@/shared/utils/cn';
 
-/* ── Slug generator ──────────────────────────────────────────── */
+/* ── Helpers ─────────────────────────────────────────────────── */
 function toSlug(title) {
   return title.toLowerCase()
-    .replace(/['']/g, '')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .slice(0, 80);
+    .replace(/['']/g, '').replace(/[^a-z0-9\s-]/g, '').trim()
+    .replace(/\s+/g, '-').replace(/-+/g, '-').slice(0, 80);
 }
-
-/* ── Auto read time ──────────────────────────────────────────── */
 function calcReadTime(html) {
-  const text  = html.replace(/<[^>]+>/g, ' ');
-  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  const words = html.replace(/<[^>]+>/g, ' ').trim().split(/\s+/).filter(Boolean).length;
   return Math.max(1, Math.round(words / 200));
-}
-
-/* ── Field wrapper ───────────────────────────────────────────── */
-function Field({ label, required, hint, children }) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-2">
-        <label className="text-[11px] font-extrabold text-text-muted uppercase tracking-wider">
-          {label}{required && <span className="text-red-400 ml-1">*</span>}
-        </label>
-        {hint && <span className="text-[10.5px] text-text-muted italic">{hint}</span>}
-      </div>
-      {children}
-    </div>
-  );
 }
 
 const inputCls = `w-full bg-surface-2 border border-surface-4 rounded-[9px] px-3 py-2.5 text-[13px] text-text-primary outline-none transition-colors focus:border-[rgba(200,151,58,.5)] placeholder:text-text-muted`;
 
-/* ── Rich Text Toolbar ───────────────────────────────────────── */
-function RichToolbar({ onFormat }) {
+function FieldLabel({ label, required, hint }) {
+  return (
+    <div className="flex items-center gap-2 mb-1.5">
+      <label className="text-[11px] font-extrabold text-text-muted uppercase tracking-wider">
+        {label}{required && <span className="text-red-400 ml-1">*</span>}
+      </label>
+      {hint && <span className="text-[10.5px] text-text-muted italic">{hint}</span>}
+    </div>
+  );
+}
+
+/* ── Rich text toolbar ───────────────────────────────────────── */
+function RichToolbar() {
   const tools = [
-    { cmd:'bold',         icon:'B',    label:'Bold',       style:{ fontWeight:'900' } },
-    { cmd:'italic',       icon:'I',    label:'Italic',     style:{ fontStyle:'italic' } },
-    { cmd:'underline',    icon:'U',    label:'Underline',  style:{ textDecoration:'underline' } },
-    { sep: true },
-    { cmd:'h2',           icon:'H2',   label:'Heading 2',  style:{ fontWeight:'700', fontSize:'12px' } },
-    { cmd:'h3',           icon:'H3',   label:'Heading 3',  style:{ fontWeight:'700', fontSize:'11px' } },
-    { sep: true },
-    { cmd:'insertUnorderedList', icon:'• —', label:'Bullet list' },
-    { cmd:'insertOrderedList',   icon:'1.',  label:'Numbered list' },
-    { sep: true },
-    { cmd:'createLink',   icon:'🔗',   label:'Insert link' },
-    { cmd:'insertImage',  icon:'🖼',   label:'Insert image URL' },
-    { sep: true },
-    { cmd:'blockquote',   icon:'❝',    label:'Blockquote' },
-    { cmd:'code',         icon:'</>',  label:'Code block', style:{ fontFamily:'monospace', fontSize:'11px' } },
+    { cmd:'bold',                icon:'B',    style:{ fontWeight:'900' } },
+    { cmd:'italic',              icon:'I',    style:{ fontStyle:'italic' } },
+    { cmd:'underline',           icon:'U',    style:{ textDecoration:'underline' } },
+    { sep:true },
+    { cmd:'h2',                  icon:'H2',   style:{ fontWeight:'700', fontSize:'12px' } },
+    { cmd:'h3',                  icon:'H3',   style:{ fontWeight:'700', fontSize:'11px' } },
+    { sep:true },
+    { cmd:'insertUnorderedList', icon:'• —' },
+    { cmd:'insertOrderedList',   icon:'1.'  },
+    { sep:true },
+    { cmd:'createLink',          icon:'🔗'  },
+    { cmd:'blockquote',          icon:'❝'   },
+    { cmd:'code',                icon:'</>',  style:{ fontFamily:'monospace', fontSize:'11px' } },
   ];
 
   const run = (cmd) => {
-    if (cmd === 'h2') {
-      document.execCommand('formatBlock', false, 'h2');
-    } else if (cmd === 'h3') {
-      document.execCommand('formatBlock', false, 'h3');
-    } else if (cmd === 'blockquote') {
-      document.execCommand('formatBlock', false, 'blockquote');
-    } else if (cmd === 'code') {
-      document.execCommand('formatBlock', false, 'pre');
-    } else if (cmd === 'createLink') {
+    if (cmd === 'h2')         document.execCommand('formatBlock', false, 'h2');
+    else if (cmd === 'h3')    document.execCommand('formatBlock', false, 'h3');
+    else if (cmd === 'blockquote') document.execCommand('formatBlock', false, 'blockquote');
+    else if (cmd === 'code')  document.execCommand('formatBlock', false, 'pre');
+    else if (cmd === 'createLink') {
       const url = prompt('Enter URL:');
       if (url) document.execCommand('createLink', false, url);
-    } else if (cmd === 'insertImage') {
-      const url = prompt('Enter image URL:');
-      if (url) document.execCommand('insertImage', false, url);
     } else {
       document.execCommand(cmd, false, null);
     }
-    onFormat?.();
   };
 
   return (
-    <div className="flex flex-wrap gap-[2px] p-2 border-b border-surface-4" style={{ background: G.s3 }}>
-      {tools.map((t, i) =>
-        t.sep ? (
-          <div key={i} className="w-px bg-surface-5 mx-1 self-stretch" />
-        ) : (
-          <button
-            key={t.cmd}
-            type="button"
-            title={t.label}
-            onMouseDown={(e) => { e.preventDefault(); run(t.cmd); }}
-            className="px-[8px] py-[4px] rounded-[6px] text-[12px] font-bold text-text-secondary hover:text-text-primary hover:bg-surface-4 transition-colors min-w-[28px] text-center"
-            style={t.style || {}}
-          >
+    <div className="flex flex-wrap gap-0.5 px-3 py-2 border-b border-surface-4 bg-surface-3">
+      {tools.map((t, i) => t.sep
+        ? <div key={i} className="w-px h-5 bg-surface-4 mx-1 self-center" />
+        : (
+          <button key={i} type="button" onMouseDown={(e) => { e.preventDefault(); run(t.cmd); }}
+            title={t.cmd} className="px-2 py-1 rounded-[5px] text-[11.5px] text-text-secondary hover:bg-surface-4 hover:text-text-primary transition-colors"
+            style={t.style || {}}>
             {t.icon}
           </button>
         )
@@ -105,477 +80,346 @@ function RichToolbar({ onFormat }) {
   );
 }
 
-/* ── Rich Text Editor (contentEditable) ──────────────────────── */
-function RichEditor({ value, onChange }) {
-  const editorRef = useRef(null);
-  const isInit    = useRef(false);
-
-  // Set initial content once
-  useEffect(() => {
-    if (editorRef.current && !isInit.current && value) {
-      editorRef.current.innerHTML = value;
-      isInit.current = true;
-    }
-  }, [value]);
-
-  const handleInput = useCallback(() => {
-    if (editorRef.current) {
-      onChange(editorRef.current.innerHTML);
-    }
-  }, [onChange]);
-
-  return (
-    <div className="border border-surface-4 rounded-[10px] overflow-hidden focus-within:border-[rgba(200,151,58,.4)] transition-colors">
-      <RichToolbar onFormat={handleInput} />
-      <div
-        ref={editorRef}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={handleInput}
-        className="min-h-[400px] max-h-[600px] overflow-y-auto p-5 outline-none text-[14px] leading-[1.8] text-text-secondary"
-        style={{ background: G.s2 }}
-        data-placeholder="Start writing your article here… Use the toolbar above to format text, add headings, lists, links, and images."
-      />
-      <style>{`
-        [contenteditable][data-placeholder]:empty:before {
-          content: attr(data-placeholder);
-          color: #4E4B58;
-          pointer-events: none;
-        }
-        [contenteditable] h2 { color:#F0EDE2; font-size:22px; font-weight:700; margin:1.5em 0 0.5em; font-family:'Domine',serif; }
-        [contenteditable] h3 { color:#E2B96A; font-size:18px; font-weight:700; margin:1.2em 0 0.4em; font-family:'Domine',serif; }
-        [contenteditable] blockquote { border-left:3px solid #C8973A; padding:0.8em 1.2em; margin:1.2em 0; background:rgba(200,151,58,.06); border-radius:0 8px 8px 0; color:#E2B96A; font-style:italic; }
-        [contenteditable] pre { background:#0E0E16; border:1px solid #21212E; border-radius:8px; padding:1em; font-family:'JetBrains Mono',monospace; font-size:13px; color:#F0EDE2; margin:1em 0; overflow-x:auto; }
-        [contenteditable] a { color:#C8973A; text-decoration:underline; }
-        [contenteditable] ul { margin:0.8em 0 0.8em 1.5em; list-style:disc; }
-        [contenteditable] ol { margin:0.8em 0 0.8em 1.5em; list-style:decimal; }
-        [contenteditable] li { margin-bottom:0.4em; }
-        [contenteditable] strong, [contenteditable] b { color:#F0EDE2; font-weight:700; }
-        [contenteditable] img { max-width:100%; border-radius:8px; margin:1em 0; }
-      `}</style>
-    </div>
-  );
-}
-
-/* ── SEO Preview ─────────────────────────────────────────────── */
-function SeoPreview({ title, desc, slug }) {
-  const url = `autosys.ng/blog/${slug || 'your-post-slug'}`;
-  return (
-    <div className="bg-surface-2 border border-surface-4 rounded-[12px] p-4">
-      <p className="text-[10.5px] font-extrabold uppercase tracking-[2px] mb-3" style={{ color: G.g }}>
-        GOOGLE PREVIEW
-      </p>
-      <div className="bg-white rounded-[8px] p-4 shadow-sm">
-        <p className="text-[12px] text-[#202124] mb-[2px] truncate" style={{ fontFamily:'Arial,sans-serif' }}>
-          {url}
-        </p>
-        <p className="text-[18px] text-[#1a0dab] font-medium mb-1 leading-[1.3] line-clamp-2" style={{ fontFamily:'Arial,sans-serif' }}>
-          {title || 'Your Post Title | AutoSys Blog'}
-        </p>
-        <p className="text-[13px] text-[#4d5156] leading-[1.5] line-clamp-2" style={{ fontFamily:'Arial,sans-serif' }}>
-          {desc || 'Your meta description will appear here. Aim for 120-160 characters for best results in Google search.'}
-        </p>
-      </div>
-      <div className="flex items-center gap-2 mt-2">
-        <div className="flex-1 h-1.5 rounded-full" style={{ background: G.s4 }}>
-          <div className="h-full rounded-full transition-all"
-            style={{ width:`${Math.min(100, Math.round(((desc||'').length / 160) * 100))}%`,
-              background: (desc||'').length > 160 ? G.er : (desc||'').length > 100 ? G.ok : G.wa }} />
-        </div>
-        <span className="text-[10.5px] text-text-muted whitespace-nowrap">
-          {(desc||'').length}/160 chars
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════ */
-/* Blog Post Editor                                              */
-/* ══════════════════════════════════════════════════════════════ */
+/* ── Main editor ─────────────────────────────────────────────── */
 export function BlogPostEditor() {
   const { id }    = useParams();
   const navigate  = useNavigate();
   const toast     = useToast();
   const isEditing = Boolean(id);
 
-  // Find existing post when editing
-  const existing = isEditing ? DEMO_POSTS.find((p) => p.id === id) : null;
+  const savePost        = useBlogStore((s) => s.savePost);
+  const fetchAdminPosts = useBlogStore((s) => s.fetchAdminPosts);
+  const categories      = useBlogStore((s) => s.categories);
+  const fetchCategories = useBlogStore((s) => s.fetchCategories);
+  const adminBlogApi    = useBlogStore((s) => s.adminPosts);
 
-  const [saving,  setSaving]  = useState(false);
-  const [preview, setPreview] = useState(false);
-  const [tab,     setTab]     = useState('content');  // content | seo | settings
-
-  // Form state
-  const [form, setForm] = useState({
-    title:         existing?.title         || '',
-    slug:          existing?.slug          || '',
-    content:       existing?.content       || '',
-    excerpt:       existing?.excerpt       || '',
-    featuredImage: existing?.featured_image || '',
-    authorName:    existing?.author_name   || 'AutoSys Team',
-    authorBio:     existing?.author_bio    || '',
-    status:        existing?.status        || 'draft',
-    categorySlug:  existing?.category_slug || '',
-    tags:          (existing?.tags || []).join(', '),
-    featured:      existing?.featured      || false,
-    metaTitle:     existing?.meta_title    || '',
-    metaDesc:      existing?.meta_desc     || '',
-  });
-
+  const [saving,     setSaving]     = useState(false);
+  const [isFetching, setIsFetching] = useState(isEditing);
+  const [preview,    setPreview]    = useState(false);
+  const [tab,        setTab]        = useState('content');
   const [slugManual, setSlugManual] = useState(isEditing);
 
-  // Auto-generate slug from title
+  const [form, setForm] = useState({
+    title:'', slug:'', content:'', excerpt:'', featuredImage:'',
+    authorName:'AutoSys Team', authorBio:'', status:'draft',
+    categorySlug:'', tags:'', featured:false, metaTitle:'', metaDesc:'',
+  });
+
+  const editorRef = useRef(null);
+
+  /* ── Load existing post when editing ─────────────────────── */
   useEffect(() => {
-    if (!slugManual && form.title) {
+    if (!isEditing) return;
+    (async () => {
+      setIsFetching(true);
+      try {
+        // Import adminBlogApi directly to fetch single post
+        const { adminBlogApi: api } = await import('@/services/api/index');
+        const { data } = await api.getById(id);
+        const p = data.post ?? data;
+        setForm({
+          title:         p.title         || '',
+          slug:          p.slug          || '',
+          content:       p.content       || '',
+          excerpt:       p.excerpt       || '',
+          featuredImage: p.featured_image || '',
+          authorName:    p.author_name   || 'AutoSys Team',
+          authorBio:     p.author_bio    || '',
+          status:        p.status        || 'draft',
+          categorySlug:  p.category_slug || '',
+          tags:          (p.tags || []).join(', '),
+          featured:      p.featured      || false,
+          metaTitle:     p.meta_title    || '',
+          metaDesc:      p.meta_desc     || '',
+        });
+        // Populate editor content
+        if (editorRef.current) editorRef.current.innerHTML = p.content || '';
+      } catch (err) {
+        toast(err.response?.data?.message || 'Failed to load post', 'danger');
+      } finally {
+        setIsFetching(false);
+      }
+    })();
+    fetchCategories();
+  }, [id, isEditing, fetchCategories, toast]);
+
+  useEffect(() => { if (!isEditing) fetchCategories(); }, [isEditing, fetchCategories]);
+
+  /* ── Auto-generate slug + meta ───────────────────────────── */
+  useEffect(() => {
+    if (!slugManual && form.title)
       setForm((f) => ({ ...f, slug: toSlug(f.title) }));
-    }
   }, [form.title, slugManual]);
 
-  // Auto-generate meta title
   useEffect(() => {
-    if (!form.metaTitle && form.title) {
+    if (!form.metaTitle && form.title)
       setForm((f) => ({ ...f, metaTitle: `${f.title} | AutoSys Blog` }));
-    }
   }, [form.title]);
 
-  // Auto-generate meta desc from excerpt
   useEffect(() => {
-    if (!form.metaDesc && form.excerpt) {
+    if (!form.metaDesc && form.excerpt)
       setForm((f) => ({ ...f, metaDesc: f.excerpt.slice(0, 160) }));
-    }
   }, [form.excerpt]);
 
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target ? e.target.value : e }));
   const readTime = calcReadTime(form.content);
 
-  const set = (key) => (e) =>
-    setForm((f) => ({ ...f, [key]: e.target ? e.target.value : e }));
-
+  /* ── Save ────────────────────────────────────────────────── */
   const handleSave = async (publishStatus = null) => {
-    if (!form.title) { toast('Title is required'); return; }
+    if (!form.title.trim()) { toast('Title is required', 'warning'); return; }
     setSaving(true);
-
     const finalStatus = publishStatus || form.status;
-    await new Promise((r) => setTimeout(r, 600)); // Simulate API call
-
-    toast(finalStatus === 'published'
-      ? '🎉 Post published successfully!'
-      : '✅ Draft saved!'
-    );
-    setSaving(false);
-    navigate('/app/admin/blog');
+    const content = editorRef.current?.innerHTML || form.content;
+    try {
+      await savePost(isEditing ? id : null, {
+        title:          form.title,
+        slug:           form.slug || toSlug(form.title),
+        content,
+        excerpt:        form.excerpt,
+        featured_image: form.featuredImage,
+        author_name:    form.authorName,
+        author_bio:     form.authorBio,
+        status:         finalStatus,
+        category_slug:  form.categorySlug,
+        tags:           form.tags.split(',').map((t) => t.trim()).filter(Boolean),
+        featured:       form.featured,
+        meta_title:     form.metaTitle,
+        meta_desc:      form.metaDesc,
+        read_time:      calcReadTime(content),
+      });
+      toast(finalStatus === 'published' ? '🎉 Post published!' : '✅ Draft saved!');
+      navigate('/app/admin/blog');
+    } catch (err) {
+      toast(err.response?.data?.message || 'Save failed', 'danger');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const TABS = [
     { key:'content',  label:'Content',  icon:'note'     },
-    { key:'seo',      label:'SEO',      icon:'globe'     },
-    { key:'settings', label:'Settings', icon:'settings'  },
+    { key:'seo',      label:'SEO',      icon:'globe'    },
+    { key:'settings', label:'Settings', icon:'settings' },
   ];
 
+  if (isFetching) {
+    return (
+      <div className="flex items-center justify-center h-[400px]">
+        <Spinner size={28} />
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-[1400px] px-4 md:px-[22px] pt-[22px] pb-16">
-
+    <div className="max-w-[1400px] px-4 md:px-[22px] pt-[22px] pb-10">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <Link to="/app/admin/blog" className="text-text-muted hover:text-gold transition-colors">
-            <Icon name="arr" size={16} color="currentColor" className="rotate-180" />
-          </Link>
-          <div>
-            <h2 className="font-display text-[20px] font-bold">
-              {isEditing ? 'Edit Post' : 'New Post'}
-            </h2>
-            <p className="text-text-muted text-[12px] mt-[1px]">
-              {form.status === 'published' ? '🟢 Published' : '🟡 Draft'} · {readTime} min read · {form.slug || 'no-slug-yet'}
-            </p>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div>
+          <h2 className="font-display text-[22px] font-bold">
+            {isEditing ? 'Edit Post' : 'New Post'}
+          </h2>
+          <p className="text-text-secondary text-[12.5px] mt-[3px]">
+            {readTime} min read · {form.status === 'published' ? '🟢 Published' : '⚫ Draft'}
+          </p>
         </div>
-
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="ghost" size="sm" onClick={() => setPreview(!preview)}>
-            <Icon name="eye" size={13} color={G.bl} />{preview ? 'Edit' : 'Preview'}
+        <div className="flex gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setPreview((p) => !p)}>
+            <Icon name="eye" size={13} />{preview ? 'Edit' : 'Preview'}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => handleSave('draft')} disabled={saving}>
-            Save Draft
+            {saving ? <Spinner size={13} /> : 'Save Draft'}
           </Button>
-          <Button variant="gold" size="md" onClick={() => handleSave('published')} disabled={saving}>
-            {saving ? 'Saving…' : isEditing ? '✓ Update' : '🚀 Publish'}
+          <Button variant="gold" size="sm" onClick={() => handleSave('published')} disabled={saving}>
+            {saving ? <><Spinner size={13} />Saving…</> : <><Icon name="globe" size={13} />Publish</>}
           </Button>
         </div>
       </div>
 
-      <div className="flex flex-col xl:flex-row gap-5">
-        {/* ── Main Editor ────────────────────────────────────── */}
-        <div className="flex-1 min-w-0 space-y-5">
-
-          {/* Tab bar */}
-          <div className="flex gap-1 p-1 rounded-[10px] border border-surface-4 w-fit" style={{ background: G.s2 }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
+        {/* Main editor area */}
+        <div>
+          {/* Tab switcher */}
+          <div className="flex gap-1 mb-4 p-1 bg-surface-2 border border-surface-4 rounded-[10px] w-fit">
             {TABS.map((t) => (
               <button key={t.key} onClick={() => setTab(t.key)}
-                className="flex items-center gap-1.5 px-4 py-[6px] rounded-[8px] text-[12.5px] font-bold transition-all"
-                style={tab===t.key ? { background:G.g, color:G.bg } : { color:G.t1 }}>
-                <Icon name={t.icon} size={13} color={tab===t.key ? G.bg : G.t1} />
+                className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-[12px] font-bold transition-all',
+                  tab===t.key ? 'bg-gold text-[#0A0812]' : 'text-text-muted hover:text-text-primary')}>
+                <Icon name={t.icon} size={11} color={tab===t.key ? '#0A0812' : '#4E4B58'} />
                 {t.label}
               </button>
             ))}
           </div>
 
-          {/* ── Content Tab ──────────────────────────────────── */}
-          {tab === 'content' && (
-            <div className="space-y-5">
-              {/* Title */}
-              <Field label="Post Title" required>
-                <input
-                  value={form.title}
-                  onChange={set('title')}
-                  placeholder="Write an engaging headline that makes people click…"
-                  className={`${inputCls} text-[18px] font-bold`}
-                />
-              </Field>
-
-              {/* Slug */}
-              <Field label="URL Slug" hint="auto-generated from title">
-                <div className="flex gap-2 items-center">
-                  <span className="text-[12px] text-text-muted whitespace-nowrap">autosys.ng/blog/</span>
-                  <input
-                    value={form.slug}
-                    onChange={(e) => { setSlugManual(true); setForm((f) => ({ ...f, slug: toSlug(e.target.value) })); }}
-                    placeholder="your-post-url-slug"
-                    className={`${inputCls} flex-1 font-mono text-[12.5px]`}
+          {/* Content tab */}
+          {tab === 'content' && !preview && (
+            <div className="space-y-4">
+              <div>
+                <FieldLabel label="Title" required />
+                <input className={inputCls} placeholder="How Nigerian Car Dealers Are Closing 3x More Deals…"
+                  value={form.title} onChange={set('title')} />
+              </div>
+              <div>
+                <FieldLabel label="Slug" hint="auto-generated" />
+                <div className="flex gap-2">
+                  <input className={cn(inputCls, 'font-mono text-[12px]')} value={form.slug}
+                    onChange={(e) => { setSlugManual(true); set('slug')(e); }} placeholder="my-post-slug" />
+                  <Button variant="ghost" size="sm" onClick={() => { setSlugManual(false); setForm((f) => ({ ...f, slug: toSlug(f.title) })); }}>
+                    Reset
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <FieldLabel label="Excerpt" hint="shown on listing page" />
+                <textarea className={cn(inputCls, 'resize-none')} rows={3}
+                  placeholder="A compelling summary that makes readers click…"
+                  value={form.excerpt} onChange={set('excerpt')} />
+              </div>
+              <div>
+                <FieldLabel label="Content" required />
+                <div className="bg-surface-2 border border-surface-4 rounded-[10px] overflow-hidden">
+                  <RichToolbar />
+                  <div
+                    ref={editorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={(e) => setForm((f) => ({ ...f, content: e.currentTarget.innerHTML }))}
+                    className="min-h-[400px] px-4 py-4 text-[13.5px] leading-[1.8] text-text-primary outline-none prose-invert"
+                    style={{ wordBreak:'break-word' }}
+                    data-placeholder="Write your post content here…"
                   />
-                  {slugManual && (
-                    <Button variant="ghost" size="xs" onClick={() => { setSlugManual(false); setForm((f) => ({ ...f, slug: toSlug(f.title) })); }}>
-                      Reset
-                    </Button>
-                  )}
                 </div>
-              </Field>
-
-              {/* Excerpt */}
-              <Field label="Excerpt" hint="shown on blog listing + SEO description">
-                <textarea
-                  value={form.excerpt}
-                  onChange={set('excerpt')}
-                  rows={3}
-                  placeholder="A compelling 1-2 sentence summary that makes readers want to click…"
-                  className={inputCls}
-                />
-                <p className="text-[10.5px] text-text-muted text-right">{form.excerpt.length}/300 chars</p>
-              </Field>
-
-              {/* Featured Image */}
-              <Field label="Featured Image URL">
-                <input
-                  value={form.featuredImage}
-                  onChange={set('featuredImage')}
-                  placeholder="https://images.unsplash.com/photo-… or your CDN URL"
-                  className={inputCls}
-                />
-                {form.featuredImage && (
-                  <img src={form.featuredImage} alt="preview"
-                    className="mt-2 h-[140px] w-full object-cover rounded-[8px] border border-surface-4" />
-                )}
-              </Field>
-
-              {/* Rich Content Editor */}
-              <Field label="Content" required>
-                <RichEditor value={form.content} onChange={set('content')} />
-                <div className="flex justify-between text-[10.5px] text-text-muted mt-1">
-                  <span>{form.content.replace(/<[^>]+>/g,' ').trim().split(/\s+/).filter(Boolean).length} words</span>
-                  <span>~{readTime} min read</span>
-                </div>
-              </Field>
+                <p className="text-[10.5px] text-text-muted mt-1 text-right">{readTime} min read</p>
+              </div>
             </div>
           )}
 
-          {/* ── SEO Tab ──────────────────────────────────────── */}
+          {/* SEO tab */}
           {tab === 'seo' && (
-            <div className="space-y-5">
-              <SeoPreview title={form.metaTitle} desc={form.metaDesc} slug={form.slug} />
-
-              <Field label="SEO Title" hint="Recommended: 50-60 chars">
-                <input value={form.metaTitle} onChange={set('metaTitle')} className={inputCls}
-                  placeholder="Post Title | AutoSys Blog" />
-                <p className="text-[10.5px] text-text-muted text-right">{form.metaTitle.length}/60</p>
-              </Field>
-
-              <Field label="Meta Description" hint="120-160 chars for best results">
-                <textarea value={form.metaDesc} onChange={set('metaDesc')} rows={3}
-                  className={inputCls} placeholder="Compelling summary for Google search results…" />
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="flex-1 h-1.5 rounded-full" style={{ background: G.s4 }}>
-                    <div className="h-full rounded-full transition-all"
-                      style={{ width:`${Math.min(100,Math.round((form.metaDesc.length/160)*100))}%`,
-                        background: form.metaDesc.length>160 ? G.er : form.metaDesc.length>100 ? G.ok : G.wa }} />
-                  </div>
-                  <span className="text-[10.5px] text-text-muted">{form.metaDesc.length}/160</span>
-                </div>
-              </Field>
-
-              {/* SEO checklist */}
-              <div className="bg-surface-2 border border-surface-4 rounded-[12px] p-4">
-                <p className="text-[10.5px] font-extrabold uppercase tracking-[2px] mb-3" style={{ color: G.g }}>
-                  SEO CHECKLIST
+            <div className="space-y-4">
+              <div>
+                <FieldLabel label="Meta Title" hint="max 60 chars" />
+                <input className={inputCls} placeholder="Post Title | AutoSys Blog"
+                  value={form.metaTitle} onChange={set('metaTitle')} maxLength={60} />
+                <p className={cn('text-[10.5px] mt-1 text-right', form.metaTitle.length > 55 ? 'text-yellow-400' : 'text-text-muted')}>
+                  {form.metaTitle.length}/60
                 </p>
-                {[
-                  { label: 'Title is set',           ok: form.title.length > 10 },
-                  { label: 'Slug is URL-friendly',   ok: /^[a-z0-9-]+$/.test(form.slug) },
-                  { label: 'Excerpt is set',         ok: form.excerpt.length > 50 },
-                  { label: 'Meta description',       ok: form.metaDesc.length >= 120 && form.metaDesc.length <= 160 },
-                  { label: 'Featured image set',     ok: form.featuredImage.length > 0 },
-                  { label: 'Content has H2 headings', ok: form.content.includes('<h2') },
-                  { label: 'Category assigned',      ok: form.categorySlug.length > 0 },
-                  { label: 'Tags added',             ok: form.tags.length > 0 },
-                ].map(({ label, ok }) => (
-                  <div key={label} className="flex items-center gap-2 py-[5px]">
-                    <span className="text-[13px]">{ok ? '✅' : '⭕'}</span>
-                    <span className="text-[12.5px]" style={{ color: ok ? G.ok : G.t1 }}>{label}</span>
-                  </div>
-                ))}
+              </div>
+              <div>
+                <FieldLabel label="Meta Description" hint="max 160 chars" />
+                <textarea className={cn(inputCls, 'resize-none')} rows={3}
+                  placeholder="A brief description of the post for search engines…"
+                  value={form.metaDesc} onChange={set('metaDesc')} maxLength={160} />
+                <p className={cn('text-[10.5px] mt-1 text-right', form.metaDesc.length > 150 ? 'text-yellow-400' : 'text-text-muted')}>
+                  {form.metaDesc.length}/160
+                </p>
+              </div>
+              <div>
+                <FieldLabel label="Tags" hint="comma separated" />
+                <input className={inputCls} placeholder="crm, leads, sales, automation"
+                  value={form.tags} onChange={set('tags')} />
+              </div>
+              {/* SEO preview */}
+              <div className="bg-surface-3 border border-surface-4 rounded-[10px] p-4">
+                <p className="text-[10.5px] font-bold text-text-muted uppercase tracking-wider mb-2">Google Preview</p>
+                <p className="text-[15px] font-bold text-[#1a0dab] dark:text-[#8ab4f8]">{form.metaTitle || form.title || 'Post Title | AutoSys Blog'}</p>
+                <p className="text-[12px] text-[#006621] dark:text-[#4ade80]">autosys.app/blog/{form.slug || 'post-slug'}</p>
+                <p className="text-[12.5px] text-text-secondary mt-1">{form.metaDesc || form.excerpt || 'Post description will appear here…'}</p>
               </div>
             </div>
           )}
 
-          {/* ── Settings Tab ──────────────────────────────────── */}
+          {/* Settings tab */}
           {tab === 'settings' && (
-            <div className="space-y-5">
-              <Field label="Author Name">
-                <input value={form.authorName} onChange={set('authorName')} className={inputCls} />
-              </Field>
-
-              <Field label="Author Bio">
-                <textarea value={form.authorBio} onChange={set('authorBio')} rows={2}
-                  className={inputCls} placeholder="Short bio shown at the end of the article…" />
-              </Field>
-
-              <div className="flex items-center justify-between p-4 bg-surface-2 border border-surface-4 rounded-[12px]">
-                <div>
-                  <p className="text-[13px] font-bold">Featured Post</p>
-                  <p className="text-[11.5px] text-text-muted">Show in featured section and landing page blog widget</p>
-                </div>
-                <Toggle checked={form.featured} onChange={(v) => setForm((f) => ({ ...f, featured: v }))} />
+            <div className="space-y-4">
+              <div>
+                <FieldLabel label="Author Name" />
+                <input className={inputCls} placeholder="AutoSys Team" value={form.authorName} onChange={set('authorName')} />
               </div>
-
-              <div className="p-4 bg-surface-2 border border-surface-4 rounded-[12px] space-y-3">
-                <p className="text-[11px] font-extrabold uppercase tracking-[1.5px] text-text-muted">Post Status</p>
-                {['draft','published'].map((s) => (
-                  <label key={s} className="flex items-center gap-3 cursor-pointer">
-                    <input type="radio" name="status" value={s}
-                      checked={form.status === s}
-                      onChange={() => setForm((f) => ({ ...f, status: s }))}
-                      className="accent-gold" />
-                    <div>
-                      <p className="text-[13px] font-bold capitalize">{s}</p>
-                      <p className="text-[11.5px] text-text-muted">
-                        {s==='draft' ? 'Only visible to admins' : 'Live on the blog'}
-                      </p>
-                    </div>
-                  </label>
-                ))}
+              <div>
+                <FieldLabel label="Author Bio" />
+                <textarea className={cn(inputCls, 'resize-none')} rows={2}
+                  placeholder="Brief author bio…" value={form.authorBio} onChange={set('authorBio')} />
               </div>
+              <div>
+                <FieldLabel label="Status" />
+                <select className={inputCls} value={form.status} onChange={set('status')}>
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* Preview */}
+          {preview && (
+            <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-6">
+              <h1 className="font-display text-[28px] font-bold mb-2">{form.title || 'Untitled Post'}</h1>
+              <p className="text-text-muted text-[12px] mb-6">{form.authorName} · {readTime} min read</p>
+              {form.featuredImage && (
+                <img src={form.featuredImage} alt="Featured" className="w-full h-[240px] object-cover rounded-[12px] mb-6" />
+              )}
+              <div className="prose prose-sm prose-invert max-w-none"
+                dangerouslySetInnerHTML={{ __html: form.content || '<p class="text-text-muted">No content yet…</p>' }} />
             </div>
           )}
         </div>
 
-        {/* ── Sidebar ────────────────────────────────────────── */}
-        <div className="w-full xl:w-[280px] shrink-0 space-y-4">
-
-          {/* Publish box */}
-          <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-4 space-y-4">
-            <p className="text-[10.5px] font-extrabold uppercase tracking-[2px]" style={{ color: G.g }}>
-              PUBLISH
-            </p>
-
-            <div className="space-y-2">
-              <Button variant="gold" className="w-full" onClick={() => handleSave('published')} disabled={saving}>
-                {saving ? 'Publishing…' : '🚀 Publish Now'}
-              </Button>
-              <Button variant="ghost" className="w-full" onClick={() => handleSave('draft')} disabled={saving}>
-                Save as Draft
-              </Button>
-            </div>
-
-            <div className="border-t border-surface-4 pt-3 space-y-1.5 text-[12px]">
-              <div className="flex justify-between">
-                <span className="text-text-muted">Status</span>
-                <span className="font-bold capitalize"
-                  style={{ color: form.status==='published' ? G.ok : G.wa }}>
-                  {form.status}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-muted">Read time</span>
-                <span className="font-bold">{readTime} min</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-muted">Word count</span>
-                <span className="font-bold">
-                  {form.content.replace(/<[^>]+>/g,' ').trim().split(/\s+/).filter(Boolean).length}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Category */}
-          <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-4 space-y-3">
-            <p className="text-[10.5px] font-extrabold uppercase tracking-[2px]" style={{ color: G.g }}>
-              CATEGORY
-            </p>
-            <div className="space-y-1.5">
-              {DEMO_CATEGORIES.map((cat) => (
-                <label key={cat.slug} className="flex items-center gap-2 cursor-pointer py-[3px]">
-                  <input type="radio" name="category" value={cat.slug}
-                    checked={form.categorySlug === cat.slug}
-                    onChange={() => setForm((f) => ({ ...f, categorySlug: cat.slug }))}
-                    className="accent-gold" />
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: cat.color }} />
-                  <span className="text-[12.5px] text-text-secondary">{cat.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Tags */}
-          <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-4 space-y-3">
-            <p className="text-[10.5px] font-extrabold uppercase tracking-[2px]" style={{ color: G.g }}>
-              TAGS
-            </p>
-            <input
-              value={form.tags}
-              onChange={set('tags')}
-              placeholder="crm, leads, whatsapp, nigeria"
-              className={inputCls}
-            />
-            <p className="text-[10.5px] text-text-muted">Comma-separated tags</p>
-            {form.tags && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {form.tags.split(',').map((t) => t.trim()).filter(Boolean).map((tag) => (
-                  <span key={tag} className="text-[10.5px] font-bold px-[7px] py-[3px] rounded-[5px]"
-                    style={{ background:'rgba(200,151,58,.1)', color:G.g, border:`1px solid rgba(200,151,58,.25)` }}>
-                    #{tag}
-                  </span>
-                ))}
-              </div>
+        {/* Right sidebar */}
+        <div className="space-y-4">
+          {/* Featured image */}
+          <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-4">
+            <p className="text-[11px] font-extrabold text-text-muted uppercase tracking-wider mb-3">Featured Image</p>
+            <input className={inputCls} placeholder="https://images.unsplash.com/…"
+              value={form.featuredImage} onChange={set('featuredImage')} />
+            {form.featuredImage && (
+              <img src={form.featuredImage} alt="Preview"
+                className="w-full h-[120px] object-cover rounded-[8px] mt-3 border border-surface-4" />
             )}
           </div>
 
-          {/* Tips */}
-          <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-4 space-y-2">
-            <p className="text-[10.5px] font-extrabold uppercase tracking-[2px] mb-2" style={{ color: G.g }}>
-              WRITING TIPS
-            </p>
-            {[
-              'Start with a strong hook in the first paragraph',
-              'Use H2 headings every 300-400 words',
-              'Include at least 1 real statistic or number',
-              'End with a clear CTA for the reader',
-              'Aim for 800-1500 words for SEO impact',
-            ].map((tip) => (
-              <div key={tip} className="flex items-start gap-2">
-                <span className="text-[10px] mt-[3px]" style={{ color: G.g }}>●</span>
-                <p className="text-[11.5px] text-text-muted leading-[1.5]">{tip}</p>
-              </div>
-            ))}
+          {/* Category */}
+          <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-4">
+            <p className="text-[11px] font-extrabold text-text-muted uppercase tracking-wider mb-3">Category</p>
+            <select className={inputCls} value={form.categorySlug} onChange={set('categorySlug')}>
+              <option value="">Select a category</option>
+              {categories.length > 0
+                ? categories.map((c) => (
+                    <option key={c.slug} value={c.slug}>{c.name}</option>
+                  ))
+                : [
+                    { slug:'sales-crm', name:'Sales & CRM' },
+                    { slug:'marketing', name:'Marketing' },
+                    { slug:'inventory', name:'Inventory' },
+                    { slug:'technology',name:'Technology' },
+                  ].map((c) => (
+                    <option key={c.slug} value={c.slug}>{c.name}</option>
+                  ))
+              }
+            </select>
+          </div>
+
+          {/* Options */}
+          <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-4 space-y-3">
+            <p className="text-[11px] font-extrabold text-text-muted uppercase tracking-wider">Options</p>
+            <div className="flex justify-between items-center">
+              <span className="text-[13px] font-semibold">Featured post</span>
+              <Toggle checked={form.featured} onChange={(v) => setForm((f) => ({ ...f, featured: v }))} label="Featured" />
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-col gap-2">
+            <Button variant="gold" className="w-full justify-center" onClick={() => handleSave('published')} disabled={saving}>
+              {saving ? <><Spinner size={13} />Saving…</> : <><Icon name="globe" size={13} />Publish Now</>}
+            </Button>
+            <Button variant="ghost" className="w-full justify-center" onClick={() => handleSave('draft')} disabled={saving}>
+              Save as Draft
+            </Button>
+            <Button variant="ghost" className="w-full justify-center text-text-muted"
+              onClick={() => navigate('/app/admin/blog')}>
+              Cancel
+            </Button>
           </div>
         </div>
       </div>
