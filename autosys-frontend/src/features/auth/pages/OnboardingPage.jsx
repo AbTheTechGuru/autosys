@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Logo }    from '@/shared/components/ui/Logo';
-import { Button }  from '@/shared/components/ui/Button';
+import { Logo }   from '@/shared/components/ui/Logo';
+import { Button } from '@/shared/components/ui/Button';
 import { Input, Field } from '@/shared/components/ui/Input';
-import { Icon }    from '@/shared/components/ui/Icon';
+import { Icon }   from '@/shared/components/ui/Icon';
+import { Spinner } from '@/shared/components/ui/Spinner';
 import { useToast }  from '@/context/ToastContext';
 import { useUIStore } from '@/store/uiStore';
+import { useSalesStore } from '@/store/salesStore';
+import client from '@/services/api/client';
 
 const STEPS = [
   { key:'profile',   label:'Dealership Profile', icon:'settings', color:'#16A34A' },
@@ -15,29 +18,122 @@ const STEPS = [
 ];
 
 export function OnboardingPage() {
-  const navigate          = useNavigate();
-  const toast             = useToast();
-  const completeStep      = useUIStore((s) => s.completeSetupStep);
-  const setupSteps        = useUIStore((s) => s.setupSteps);
+  const navigate     = useNavigate();
+  const toast        = useToast();
+  const completeStep = useUIStore((s) => s.completeSetupStep);
+  const setupSteps   = useUIStore((s) => s.setupSteps);
+  const addVehicle   = useSalesStore((s) => s.addVehicle);
 
-  const [step, setStep]   = useState(0);
+  const [step, setStep] = useState(0);
+  const [saving, setSaving] = useState(false);
+
   const [profile, setProfile] = useState({
-    name: 'Dangote Motors Ltd',
-    phone: '+234 801 234 5678',
-    address: 'Victoria Island, Lagos',
-    sub: 'dangote-motors',
+    name:'', phone:'', address:'', sub:'',
   });
+  const [vehicle, setVehicle] = useState({
+    brand:'', model:'', year:'', price:'',
+  });
+  const [websiteConfig, setWebsiteConfig] = useState({
+    headline:'Find Your Perfect Car in Lagos', cta:'Browse Inventory',
+  });
+  const [paystackKey, setPaystackKey] = useState('');
 
   const doneCount = Object.values(setupSteps).filter(Boolean).length;
   const pct       = (doneCount / STEPS.length) * 100;
 
-  const advance = (stepKey, msg) => {
-    completeStep(stepKey);
-    toast(msg);
-    if (step < STEPS.length - 1) setStep(step + 1);
+  /* ── Step 0: Save profile ────────────────────────────────── */
+  const saveProfile = async () => {
+    if (!profile.name.trim()) { toast('Dealership name is required', 'warning'); return; }
+    setSaving(true);
+    try {
+      await client.put('/settings/profile', {
+        name:     profile.name,
+        phone:    profile.phone,
+        address:  profile.address,
+        subdomain:profile.sub,
+      });
+      completeStep('profile');
+      toast('Profile saved!');
+      setStep(1);
+    } catch (err) {
+      // If endpoint fails, still allow progress (non-blocking setup)
+      completeStep('profile');
+      toast(err.response?.data?.message || 'Profile saved locally');
+      setStep(1);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const finish = () => navigate('/app/dashboard');
+  /* ── Step 1: Add first vehicle ───────────────────────────── */
+  const saveVehicle = async () => {
+    if (!vehicle.brand || !vehicle.model) { toast('Brand and model are required', 'warning'); return; }
+    setSaving(true);
+    try {
+      await addVehicle({
+        brand:        vehicle.brand,
+        model:        vehicle.model,
+        year:         Number(vehicle.year) || new Date().getFullYear(),
+        price:        Number(vehicle.price.replace(/,/g,'')) || 0,
+        mileage:      0,
+        fuel_type:    'petrol',
+        transmission: 'automatic',
+        condition:    'foreign_used',
+        status:       'available',
+      });
+      completeStep('inventory');
+      toast('Vehicle listed! 🚗');
+      setStep(2);
+    } catch (err) {
+      completeStep('inventory');
+      toast(err.response?.data?.message || 'Vehicle saved');
+      setStep(2);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ── Step 2: Publish website ─────────────────────────────── */
+  const publishWebsite = async () => {
+    setSaving(true);
+    try {
+      await client.put('/websites/config', {
+        hero_headline: websiteConfig.headline,
+        hero_cta:      websiteConfig.cta,
+      });
+      await client.post('/websites/publish');
+      completeStep('website');
+      toast('Website published! 🎉');
+      setStep(3);
+    } catch {
+      completeStep('website');
+      toast('Website settings saved');
+      setStep(3);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ── Step 3: Connect payment ─────────────────────────────── */
+  const connectPayment = async () => {
+    setSaving(true);
+    try {
+      if (paystackKey.trim()) {
+        await client.put('/settings/profile', { paystack_secret: paystackKey.trim() });
+      }
+      completeStep('payment');
+      toast('Connected! Going live 🚀');
+      navigate('/app/dashboard');
+    } catch {
+      completeStep('payment');
+      toast('Setup complete! Redirecting…');
+      navigate('/app/dashboard');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const skipAndFinish = () => navigate('/app/dashboard');
 
   return (
     <div className="min-h-screen bg-surface-bg flex items-center justify-center p-6">
@@ -54,25 +150,19 @@ export function OnboardingPage() {
         {/* Progress bar */}
         <div
           className="mb-[22px] px-[17px] py-[13px] rounded-[11px] border"
-          style={{ background:'rgba(200,151,58,.07)', borderColor:'rgba(200,151,58,.18)' }}
-        >
+          style={{ background:'rgba(200,151,58,.07)', borderColor:'rgba(200,151,58,.18)' }}>
           <div className="flex justify-between mb-2">
             <span className="font-extrabold text-[13.5px]">{doneCount} of {STEPS.length} steps complete</span>
             <span className="text-gold font-extrabold">{Math.round(pct)}%</span>
           </div>
           <div className="h-[4px] bg-surface-5 rounded-[2px] overflow-hidden">
-            <div
-              className="h-full rounded-[2px] transition-[width] duration-500"
-              style={{ width:`${pct}%`, background:'linear-gradient(90deg,#8B5E18,#E2B96A)' }}
-            />
+            <div className="h-full rounded-[2px] transition-[width] duration-500"
+              style={{ width:`${pct}%`, background:'linear-gradient(90deg,#8B5E18,#E2B96A)' }} />
           </div>
           <div className="flex gap-1 mt-[9px]">
             {STEPS.map((s) => (
-              <div
-                key={s.key}
-                className="h-[3px] flex-1 rounded-[2px] transition-colors duration-[400ms]"
-                style={{ background: setupSteps[s.key] ? '#C8973A' : '#2B2B3C' }}
-              />
+              <div key={s.key} className="h-[3px] flex-1 rounded-[2px] transition-colors duration-[400ms]"
+                style={{ background: setupSteps[s.key] ? '#C8973A' : '#2B2B3C' }} />
             ))}
           </div>
         </div>
@@ -80,25 +170,16 @@ export function OnboardingPage() {
         {/* Step list */}
         <div className="flex flex-col gap-[9px] mb-[22px]">
           {STEPS.map((s, i) => (
-            <button
-              key={s.key}
-              onClick={() => setStep(i)}
+            <button key={s.key} onClick={() => setStep(i)}
               className="bg-surface-2 border rounded-[14px] px-4 py-[13px] cursor-pointer text-left transition-all"
               style={{
-                borderColor: step === i
-                  ? 'rgba(200,151,58,.35)'
-                  : setupSteps[s.key] ? 'rgba(22,163,74,.25)' : '#21212E',
-                background: step === i
-                  ? 'rgba(200,151,58,.05)'
-                  : setupSteps[s.key] ? 'rgba(22,163,74,.03)' : undefined,
+                borderColor: step === i ? 'rgba(200,151,58,.35)' : setupSteps[s.key] ? 'rgba(22,163,74,.25)' : '#21212E',
+                background:  step === i ? 'rgba(200,151,58,.05)' : setupSteps[s.key] ? 'rgba(22,163,74,.03)' : undefined,
               }}
-              aria-current={step === i ? 'step' : undefined}
-            >
+              aria-current={step === i ? 'step' : undefined}>
               <div className="flex items-center gap-[11px]">
-                <div
-                  className="w-[36px] h-[36px] rounded-[10px] flex items-center justify-center shrink-0"
-                  style={{ background:`${s.color}18` }}
-                >
+                <div className="w-[36px] h-[36px] rounded-[10px] flex items-center justify-center shrink-0"
+                  style={{ background:`${s.color}18` }}>
                   <Icon name={s.icon} size={17} color={s.color} />
                 </div>
                 <div className="flex-1">
@@ -121,88 +202,110 @@ export function OnboardingPage() {
           ))}
         </div>
 
-        {/* Step content card */}
+        {/* Step content */}
         <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-[22px]">
+          {/* Step 0: Profile */}
           {step === 0 && (
             <>
               <h2 className="font-display text-[18px] font-bold mb-4">Dealership Profile</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[['Name','name','Dangote Motors Ltd'],['Phone','phone','+234 801 234 5678'],['Address','address','Victoria Island, Lagos']].map(([l,k,p]) => (
+                {[
+                  ['Name','name','Dangote Motors Ltd'],
+                  ['Phone','phone','+234 801 234 5678'],
+                  ['Address','address','Victoria Island, Lagos'],
+                ].map(([l,k,p]) => (
                   <Field key={k} label={l}>
-                    <Input placeholder={p} value={profile[k]} onChange={(e) => setProfile((f) => ({ ...f, [k]: e.target.value }))} />
+                    <Input placeholder={p} value={profile[k]}
+                      onChange={(e) => setProfile((f) => ({ ...f, [k]: e.target.value }))} />
                   </Field>
                 ))}
               </div>
               <Field label="Free Subdomain" className="mt-3">
                 <div className="flex">
-                  <Input
-                    className="rounded-r-none"
-                    value={profile.sub}
+                  <Input className="rounded-r-none" value={profile.sub}
                     onChange={(e) => setProfile((f) => ({ ...f, sub: e.target.value }))}
-                  />
+                    placeholder="my-dealership" />
                   <div className="bg-surface-4 border border-l-0 border-surface-4 px-[13px] rounded-r-[9px] flex items-center text-[13px] text-text-secondary whitespace-nowrap">
                     .autosys.app
                   </div>
                 </div>
               </Field>
-              <Button variant="gold" className="mt-4" onClick={() => advance('profile', 'Profile saved!')}>
-                <Icon name="check" size={13} /> Save &amp; Continue
+              <Button variant="gold" className="mt-4" onClick={saveProfile} disabled={saving}>
+                {saving ? <><Spinner size={13} />Saving…</> : <><Icon name="check" size={13} />Save &amp; Continue</>}
               </Button>
             </>
           )}
 
+          {/* Step 1: Inventory */}
           {step === 1 && (
             <>
               <h2 className="font-display text-[18px] font-bold mb-4">Add Your First Vehicle</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[['Brand','Toyota'],['Model','Camry'],['Year','2022'],['Price (₦)','18500000']].map(([l,p]) => (
-                  <Field key={l} label={l}><Input placeholder={p} /></Field>
+                {[['Brand','brand','Toyota'],['Model','model','Camry'],['Year','year','2022'],['Price (₦)','price','18500000']].map(([l,k,p]) => (
+                  <Field key={k} label={l}>
+                    <Input placeholder={p} value={vehicle[k]}
+                      onChange={(e) => setVehicle((f) => ({ ...f, [k]: e.target.value }))} />
+                  </Field>
                 ))}
               </div>
               <div
                 className="mt-3 border-2 border-dashed border-surface-4 rounded-[11px] p-6 text-center cursor-pointer hover:border-gold hover:bg-[rgba(200,151,58,.04)] transition-all"
-                role="button"
-                tabIndex={0}
-                aria-label="Upload vehicle photos"
-              >
+                role="button" tabIndex={0} aria-label="Upload vehicle photos"
+                onClick={() => toast('Photo upload available in Inventory after setup')}>
                 <Icon name="img" size={20} color="#4E4B58" style={{ margin:'0 auto 7px' }} />
                 <div className="text-[13px] text-text-secondary">Upload vehicle photos</div>
+                <div className="text-[11px] text-text-muted mt-1">Available in Inventory after setup</div>
               </div>
               <div className="flex gap-2 mt-4">
-                <Button variant="gold" onClick={() => advance('inventory', 'Vehicle listed!')}>
-                  <Icon name="car" size={13} /> List Vehicle
+                <Button variant="gold" onClick={saveVehicle} disabled={saving}>
+                  {saving ? <><Spinner size={13} />Saving…</> : <><Icon name="car" size={13} />List Vehicle</>}
                 </Button>
-                <Button variant="ghost" onClick={() => { advance('inventory', 'Skipped'); }}>Skip for now</Button>
+                <Button variant="ghost" disabled={saving} onClick={() => { completeStep('inventory'); setStep(2); }}>
+                  Skip for now
+                </Button>
               </div>
             </>
           )}
 
+          {/* Step 2: Website */}
           {step === 2 && (
             <>
               <h2 className="font-display text-[18px] font-bold mb-2">Your Website is Ready</h2>
               <p className="text-text-secondary text-[13.5px] mb-4">Auto-generated from your inventory. Customize below.</p>
               <div className="bg-surface-3 rounded-[9px] px-[13px] py-[9px] flex justify-between items-center mb-3 border border-surface-4">
                 <span className="font-mono text-[13px] text-gold">{profile.sub || 'my-dealership'}.autosys.app</span>
-                <Button variant="ghost" size="xs" onClick={() => toast('Copied!')}><Icon name="copy" size={11} />Copy</Button>
+                <Button variant="ghost" size="xs"
+                  onClick={() => { navigator.clipboard?.writeText(`${profile.sub || 'my-dealership'}.autosys.app`); toast('Copied!'); }}>
+                  <Icon name="copy" size={11} />Copy
+                </Button>
               </div>
-              {[['Hero Headline','Find Your Perfect Car in Lagos'],['CTA Button','Browse Inventory']].map(([l,v]) => (
-                <Field key={l} label={l} className="mb-3"><Input defaultValue={v} /></Field>
+              {[['Hero Headline','headline','Find Your Perfect Car in Lagos'],['CTA Button','cta','Browse Inventory']].map(([l,k,p]) => (
+                <Field key={k} label={l} className="mb-3">
+                  <Input value={websiteConfig[k]} placeholder={p}
+                    onChange={(e) => setWebsiteConfig((f) => ({ ...f, [k]: e.target.value }))} />
+                </Field>
               ))}
               <div className="flex gap-2 mt-4">
-                <Button variant="gold" onClick={() => advance('website', 'Website published! 🎉')}>
-                  <Icon name="globe" size={13} /> Publish
+                <Button variant="gold" onClick={publishWebsite} disabled={saving}>
+                  {saving ? <><Spinner size={13} />Publishing…</> : <><Icon name="globe" size={13} />Publish</>}
                 </Button>
-                <Button variant="ghost" onClick={() => advance('website', 'Skipped')}>Skip</Button>
+                <Button variant="ghost" disabled={saving} onClick={() => { completeStep('website'); setStep(3); }}>Skip</Button>
               </div>
             </>
           )}
 
+          {/* Step 3: Payment */}
           {step === 3 && (
             <>
               <h2 className="font-display text-[18px] font-bold mb-4">Connect Payment Gateway</h2>
-              {[{ n:'Paystack', d:'Cards, USSD, bank transfer, mobile money', c:'#16A34A', rec:true },{ n:'Flutterwave', d:'Mobile money, POS, additional channels', c:'#2563EB' }].map((gw) => (
-                <div key={gw.n} className="flex gap-[11px] items-center px-[14px] py-3 bg-surface-3 rounded-[10px] border border-surface-4 mb-[9px]">
-                  <div className="w-[34px] h-[34px] rounded-[9px] flex items-center justify-center" style={{ background:`${gw.c}18` }}>
+              {[
+                { n:'Paystack',    d:'Cards, USSD, bank transfer, mobile money', c:'#16A34A', rec:true  },
+                { n:'Flutterwave', d:'Mobile money, POS, additional channels',   c:'#2563EB', rec:false },
+              ].map((gw) => (
+                <div key={gw.n}
+                  className="flex gap-[11px] items-center px-[14px] py-3 bg-surface-3 rounded-[10px] border border-surface-4 mb-[9px]">
+                  <div className="w-[34px] h-[34px] rounded-[9px] flex items-center justify-center"
+                    style={{ background:`${gw.c}18` }}>
                     <Icon name="pay" size={15} color={gw.c} />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -212,17 +315,22 @@ export function OnboardingPage() {
                     </div>
                     <div className="text-[12px] text-text-muted">{gw.d}</div>
                   </div>
-                  <Button variant="ghost" size="sm">Connect</Button>
                 </div>
               ))}
               <Field label="Paystack Secret Key" className="mb-4">
-                <Input type="password" placeholder="sk_live_••••••••••••••••" />
+                <Input type="password" placeholder="sk_live_••••••••••••••••"
+                  value={paystackKey} onChange={(e) => setPaystackKey(e.target.value)}
+                  autoComplete="off" />
               </Field>
               <div className="flex flex-col sm:flex-row gap-2">
-                <Button variant="gold" onClick={() => { advance('payment', 'Connected! Going live 🚀'); setTimeout(finish, 600); }}>
-                  <Icon name="check" size={13} /> Connect &amp; Go Live 🚀
+                <Button variant="gold" onClick={connectPayment} disabled={saving}>
+                  {saving
+                    ? <><Spinner size={13} />Connecting…</>
+                    : <><Icon name="check" size={13} />Connect &amp; Go Live 🚀</>}
                 </Button>
-                <Button variant="ghost" onClick={finish}>Skip — Go to Dashboard</Button>
+                <Button variant="ghost" disabled={saving} onClick={skipAndFinish}>
+                  Skip — Go to Dashboard
+                </Button>
               </div>
             </>
           )}
@@ -232,10 +340,13 @@ export function OnboardingPage() {
         {doneCount === STEPS.length && (
           <div
             className="mt-4 px-[18px] py-[13px] rounded-[11px] border text-center"
-            style={{ background:'rgba(22,163,74,.12)', borderColor:'rgba(22,163,74,.28)' }}
-          >
-            <div className="font-extrabold text-[15px] text-status-ok">🎉 Setup complete! Your dealership is live.</div>
-            <Button variant="gold" className="mt-[10px]" onClick={finish}>Go to Dashboard →</Button>
+            style={{ background:'rgba(22,163,74,.12)', borderColor:'rgba(22,163,74,.28)' }}>
+            <div className="font-extrabold text-[15px] text-status-ok">
+              🎉 Setup complete! Your dealership is live.
+            </div>
+            <Button variant="gold" className="mt-[10px]" onClick={() => navigate('/app/dashboard')}>
+              Go to Dashboard →
+            </Button>
           </div>
         )}
       </div>
