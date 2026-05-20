@@ -5,7 +5,7 @@ import { Button } from '@/shared/components/ui/Button';
 import { Icon }   from '@/shared/components/ui/Icon';
 import { G }      from '@/shared/utils/tokens';
 import { PLANS }  from '@/shared/constants';
-import { DEMO_POSTS, DEMO_CATEGORIES } from '@/store/blogStore';
+import { useBlogStore } from '@/store/blogStore';
 
 /* ── Static data ────────────────────────────────────────────── */
 const FEATURES = [
@@ -37,8 +37,8 @@ const TICKER_ITEMS = ['✓ Inventory Management','✓ Website Builder','✓ CRM 
 const fmtDate = (d) => new Date(d).toLocaleDateString('en-NG', { month:'short', day:'numeric', year:'numeric' });
 
 function BlogCard({ post }) {
-  const catColor = DEMO_CATEGORIES.find((c) => c.slug === post.category_slug)?.color || G.g;
-  const catName  = DEMO_CATEGORIES.find((c) => c.slug === post.category_slug)?.name  || post.category_slug;
+  const catColor = G.g;
+  const catName  = post.category_name || post.category_slug || 'Article';
 
   return (
     <Link
@@ -110,7 +110,11 @@ export function LandingPage() {
   }, []);
 
   const goAuth = (e) => { e?.preventDefault(); navigate('/auth'); };
-  const featuredBlogPosts = DEMO_POSTS.filter((p) => p.featured).slice(0, 3);
+  const blogPosts      = useBlogStore((s) => s.posts);
+  const fetchFeatured  = useBlogStore((s) => s.fetchFeatured);
+  // Load featured posts for blog section
+  useEffect(() => { fetchFeatured(); }, [fetchFeatured]);
+  const featuredBlogPosts = (blogPosts.filter((p) => p.featured && p.status === 'published').slice(0, 3));
 
   return (
     <div className="bg-surface-bg overflow-x-hidden">
