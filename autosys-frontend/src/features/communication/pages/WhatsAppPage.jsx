@@ -1,75 +1,132 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Button }  from '@/shared/components/ui/Button';
 import { Icon }    from '@/shared/components/ui/Icon';
-import { Avatar }  from '@/shared/components/ui/Avatar';
+import { Avatar, toInitials } from '@/shared/components/ui/Avatar';
 import { LiveDot } from '@/shared/components/ui/LiveDot';
 import { Spinner } from '@/shared/components/ui/Spinner';
 import { SearchBar } from '@/shared/components/ui/Input';
 import { useToast }  from '@/context/ToastContext';
-import { aiApi } from '@/services/api/index';
+import { inboxApi, aiApi } from '@/services/api/index';
 import { cn } from '@/shared/utils/cn';
 import { G }  from '@/shared/utils/tokens';
 
-const CONVS = [
-  { id:0, name:'Emeka Okafor',  phone:'08012345678', car:'Toyota Camry', unread:2, last:'Is the car still available?', t:'2m',  av:'EO', online:true  },
-  { id:1, name:'Amaka Nwosu',   phone:'07098765432', car:'Mercedes GLE 450', unread:0, last:'Can you send the papers?',    t:'15m', av:'AN', online:false },
-  { id:2, name:'Fatima Aliyu',  phone:'08133445566', car:'Honda CR-V', unread:1, last:"What's the best price?",       t:'1h',  av:'FA', online:true  },
-  { id:3, name:'Biodun Adeyemi',phone:'09011223344', car:'Lexus RX 350', unread:0, last:'Thank you so much! 🙏',        t:'1d',  av:'BA', online:false },
+const QUICK_REPLIES = [
+  'Still available! ✅',
+  'Great price! 🔥',
+  'Come for viewing 🚗',
+  'Confirmed ✓',
+  'Let me check and get back to you.',
 ];
 
-const SEED_MSGS = {
-  0: [{ from:'customer', text:'Hello, I saw your Toyota Camry. Is it still available?', tm:'9:40' },{ from:'customer', text:"What's your best price? I'm ready to buy today.", tm:'9:41' },{ from:'me', text:'Good morning Emeka! Yes, the 2022 Camry XSE V6 is still available at ₦18.5M. Excellent condition, 42,000km. Shall we schedule a viewing?', tm:'9:45' }],
-  1: [{ from:'me', text:'Good morning Amaka! Following up on the Mercedes GLE 450 you inquired about.', tm:'Yesterday' },{ from:'customer', text:'Yes I\'m very interested! Can you send me the papers?', tm:'Yesterday' }],
-  2: [{ from:'customer', text:"Hi, what's your best price for the Honda CR-V Hybrid?", tm:'10:15' }],
-  3: [{ from:'me', text:'Congratulations on your new Lexus! We\'re honored to serve you. Enjoy! 🚗', tm:'Yesterday' },{ from:'customer', text:'Thank you so much! 🙏', tm:'Yesterday' }],
+// Seed conversations shown instantly before backend responds
+const SEED_CONVS = [
+  { id:'sc-0', lead_id:'sc-0', leads:{ name:'Emeka Okafor',   phone:'08012345678' }, body:'Is the car still available?',     created_at: new Date(Date.now()-120000).toISOString(),  unread_count:2, channel:'whatsapp' },
+  { id:'sc-1', lead_id:'sc-1', leads:{ name:'Amaka Nwosu',    phone:'07098765432' }, body:'Can you send the papers?',        created_at: new Date(Date.now()-900000).toISOString(),  unread_count:0, channel:'whatsapp' },
+  { id:'sc-2', lead_id:'sc-2', leads:{ name:'Fatima Aliyu',   phone:'08133445566' }, body:"What's the best price?",         created_at: new Date(Date.now()-3600000).toISOString(), unread_count:1, channel:'whatsapp' },
+  { id:'sc-3', lead_id:'sc-3', leads:{ name:'Biodun Adeyemi', phone:'09011223344' }, body:'Thank you so much! 🙏',           created_at: new Date(Date.now()-86400000).toISOString(),unread_count:0, channel:'whatsapp' },
+];
+const SEED_THREADS = {
+  'sc-0': [
+    { id:'m1', direction:'in',  body:'Hello, I saw your Toyota Camry. Is it still available?',           created_at:new Date(Date.now()-7200000).toISOString() },
+    { id:'m2', direction:'in',  body:"What's your best price? I'm ready to buy today.",                  created_at:new Date(Date.now()-7100000).toISOString() },
+    { id:'m3', direction:'out', body:'Good morning Emeka! Yes, the 2022 Camry XSE V6 is still available at ₦18.5M. Excellent condition, 42,000km. Shall we schedule a viewing?', created_at:new Date(Date.now()-7000000).toISOString() },
+  ],
+  'sc-1': [
+    { id:'m4', direction:'out', body:'Good morning Amaka! Following up on the Mercedes GLE 450 you enquired about.', created_at:new Date(Date.now()-86400000).toISOString() },
+    { id:'m5', direction:'in',  body:"Yes I'm very interested! Can you send me the papers?",                         created_at:new Date(Date.now()-82800000).toISOString() },
+  ],
 };
 
-const QUICK_REPLIES = ['Still available! ✅','Great price! 🔥','Come for viewing 🚗','Confirmed ✓'];
-
 export function WhatsAppPage() {
-  const toast    = useToast();
-  const [selIdx, setSelIdx] = useState(0);
-  const [msgs,   setMsgs]   = useState(SEED_MSGS);
-  const [text,   setText]   = useState('');
-  const [aiLoad, setAiLoad] = useState(false);
+  const toast = useToast();
+
+  const [convs,      setConvs]      = useState(SEED_CONVS);
+  const [thread,     setThread]     = useState(SEED_THREADS['sc-0'] ?? []);
+  const [selConv,    setSelConv]    = useState(SEED_CONVS[0]);
+  const [text,       setText]       = useState('');
+  const [aiLoad,     setAiLoad]     = useState(false);
+  const [isSending,  setIsSending]  = useState(false);
+  const [isLoadingConvs, setIsLoadingConvs] = useState(false);
+  const [isLoadingThread, setIsLoadingThread] = useState(false);
+  const [searchQ,    setSearchQ]    = useState('');
   const endRef = useRef(null);
 
-  const conv = CONVS[selIdx];
-  const messages = msgs[selIdx] ?? [];
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [thread]);
 
+  /* ── Fetch WhatsApp conversations ─────────────────────────── */
+  const fetchConvs = useCallback(async () => {
+    setIsLoadingConvs(true);
+    try {
+      const { data } = await inboxApi.getConversations({ channel: 'whatsapp' });
+      const fetched = data.conversations ?? [];
+      if (fetched.length > 0) {
+        setConvs(fetched);
+        setSelConv(fetched[0]);
+      }
+    } catch { /* keep seed */ } finally {
+      setIsLoadingConvs(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchConvs(); }, [fetchConvs]);
+
+  /* ── Fetch thread ─────────────────────────────────────────── */
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [msgs, selIdx]);
+    if (!selConv?.lead_id) return;
+    // Use seed thread for seed IDs
+    if (selConv.lead_id.startsWith('sc-')) {
+      setThread(SEED_THREADS[selConv.lead_id] ?? []);
+      return;
+    }
+    setIsLoadingThread(true);
+    inboxApi.getThread(selConv.lead_id, 'whatsapp')
+      .then(({ data }) => setThread(data.messages ?? []))
+      .catch(() => setThread([]))
+      .finally(() => setIsLoadingThread(false));
+  }, [selConv]);
 
-  const send = () => {
-    if (!text.trim()) return;
-    setMsgs((m) => ({
-      ...m,
-      [selIdx]: [...(m[selIdx] ?? []), { from:'me', text, tm:'Now' }],
-    }));
+  /* ── Send ─────────────────────────────────────────────────── */
+  const send = async (msgText = text) => {
+    if (!msgText.trim() || !selConv?.lead_id) return;
+    const optimistic = { id:`local-${Date.now()}`, direction:'out', body:msgText, created_at:new Date().toISOString() };
+    setThread((t) => [...t, optimistic]);
     setText('');
-    toast('Sent via WhatsApp!');
+    setIsSending(true);
+    try {
+      await inboxApi.send({ leadId: selConv.lead_id, channel: 'whatsapp', message: msgText });
+      toast('Sent via WhatsApp!');
+    } catch (err) {
+      setThread((t) => t.filter((m) => m.id !== optimistic.id));
+      toast(err.response?.data?.message || 'WhatsApp not connected — check Settings → Integrations', 'danger');
+      setText(msgText);
+    } finally {
+      setIsSending(false);
+    }
   };
 
-  const generateReply = async () => {
+  /* ── AI reply ─────────────────────────────────────────────── */
+  const generateAiReply = async () => {
+    if (!selConv?.lead_id) return;
     setAiLoad(true);
     try {
-      const lastMsg = messages.filter((m) => m.from === 'customer').slice(-1)[0]?.text ?? '';
-      const { data } = await aiApi.whatsappReply({
-        customer_name:    conv.name,
-        vehicle_interest: conv.car,
-        last_message:     lastMsg,
-      });
-      const reply = data.text;
-      setText(reply);
+      const { data } = await aiApi.followup(selConv.lead_id);
+      setText(data.text);
     } catch {
-      setText('Thank you for your interest! The vehicle is still available. Would you like to schedule a viewing this week?');
+      setText('Thank you for your message! We have the vehicle available and would love to arrange a viewing for you. When would be a good time? 🚗');
+    } finally {
+      setAiLoad(false);
     }
-    setAiLoad(false);
   };
 
+  const filteredConvs = searchQ
+    ? convs.filter((c) => (c.leads?.name || '').toLowerCase().includes(searchQ.toLowerCase()))
+    : convs;
+
+  const totalUnread = convs.reduce((s, c) => s + (c.unread_count || 0), 0);
+  const lead        = selConv?.leads;
+
   return (
-    <div className="max-w-[1500px] px-4 md:px-[22px] pt-[22px] pb-[88px] md:pb-[22px]">
+    <div className="max-w-[1400px] px-4 md:px-[22px] pt-[22px] pb-[88px] md:pb-[22px]">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
@@ -77,154 +134,149 @@ export function WhatsAppPage() {
             <Icon name="wa" size={22} color="#25D366" /> WhatsApp CRM
           </h2>
           <p className="text-text-secondary text-[12.5px] mt-[3px]">
-            {CONVS.filter((c) => c.unread > 0).length} unread · {CONVS.filter((c) => c.online).length} online
+            {totalUnread > 0 ? `${totalUnread} unread · ` : ''}{convs.length} conversations
           </p>
         </div>
-        <Button variant="gold" size="sm" onClick={() => toast('Broadcast opened!')}>
-          <Icon name="wa" size={13} />New Broadcast
-        </Button>
       </div>
 
-      {/* Chat layout */}
-      <div
-        className="border border-surface-4 rounded-[14px] overflow-hidden"
-        style={{ height: 'calc(100vh - 220px)', minHeight: 500 }}
-      >
-        <div className="grid h-full" style={{ gridTemplateColumns: '292px 1fr' }}>
-          {/* Conversation list */}
-          <div className="bg-surface-2 border-r border-surface-4 flex flex-col overflow-hidden">
-            <div className="p-[11px] border-b border-surface-4">
-              <SearchBar placeholder="Search contacts…" />
-            </div>
-            <ul className="flex-1 overflow-y-auto" role="list">
-              {CONVS.map((c, i) => (
-                <li
-                  key={c.id}
-                  role="button"
-                  aria-current={selIdx === i ? 'page' : undefined}
-                  tabIndex={0}
-                  onClick={() => setSelIdx(i)}
-                  onKeyDown={(e) => e.key === 'Enter' && setSelIdx(i)}
-                  className={cn(
-                    'flex gap-[10px] px-[13px] py-[11px] cursor-pointer border-b border-surface-4',
-                    'border-l-2 transition-all',
-                    selIdx === i
-                      ? 'bg-[rgba(200,151,58,.1)] border-l-gold'
-                      : 'border-l-transparent hover:bg-surface-3/50',
-                  )}
-                >
-                  <div className="relative shrink-0">
-                    <Avatar initials={c.av} size={36} />
-                    {c.online && (
-                      <div className="absolute bottom-0 right-0 w-[8px] h-[8px] rounded-full bg-status-ok border-2 border-surface-2" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline mb-[2px]">
-                      <div className="text-[13.5px] font-extrabold truncate">{c.name}</div>
-                      <div className="text-[10px] text-text-muted shrink-0">{c.t}</div>
-                    </div>
-                    <div className="text-[11.5px] text-text-secondary truncate mb-[2px]">{c.last}</div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] text-gold">{c.car}</span>
-                      {c.unread > 0 && (
-                        <span className="w-[17px] h-[17px] rounded-full bg-[#25D366] text-white text-[9.5px] font-extrabold flex items-center justify-center">
-                          {c.unread}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+      <div className="flex gap-3 h-[calc(100vh-180px)] min-h-[500px]">
+        {/* Left: conversation list */}
+        <div className="w-[270px] shrink-0 bg-surface-1 border border-surface-4 rounded-[14px] flex flex-col overflow-hidden">
+          <div className="px-3 py-2 border-b border-surface-4">
+            <SearchBar placeholder="Search…" value={searchQ} onChange={(e) => setSearchQ(e.target.value)} className="text-[12px]" />
           </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+            {isLoadingConvs
+              ? Array(4).fill(0).map((_, i) => <div key={i} className="h-[64px] bg-surface-2 rounded-[10px] animate-pulse my-1" />)
+              : filteredConvs.map((c) => {
+                const name    = c.leads?.name || 'Unknown';
+                const unread  = c.unread_count || 0;
+                const preview = (c.body || '').slice(0, 42) + ((c.body || '').length > 42 ? '…' : '');
+                const time    = c.created_at ? new Date(c.created_at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : '';
+                return (
+                  <button key={c.id} onClick={() => setSelConv(c)}
+                    className={cn('w-full text-left flex items-start gap-3 px-3 py-[10px] rounded-[10px] border transition-all',
+                      selConv?.id === c.id
+                        ? 'bg-[rgba(37,211,102,.08)] border-[rgba(37,211,102,.25)]'
+                        : 'bg-transparent border-transparent hover:bg-surface-2 hover:border-surface-4')}>
+                    <Avatar initials={toInitials(name)} size={36} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start">
+                        <span className="text-[12.5px] font-bold truncate">{name}</span>
+                        <span className="text-[10px] text-text-muted shrink-0">{time}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-[2px]">
+                        <p className="text-[11.5px] text-text-muted truncate flex-1">{preview}</p>
+                        {unread > 0 && (
+                          <span className="shrink-0 bg-[#25D366] text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center">
+                            {unread}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            }
+          </div>
+        </div>
 
-          {/* Chat panel */}
-          <div className="flex flex-col bg-surface-1">
-            {/* Chat header */}
-            <div
-              className="flex items-center gap-3 px-[18px] py-[13px]"
-              style={{ background: 'linear-gradient(135deg,#128C7E,#075E54)' }}
-            >
-              <div className="relative shrink-0">
-                <Avatar initials={conv.av} size={36} />
-                {conv.online && (
-                  <div className="absolute bottom-0 right-0 w-[8px] h-[8px] rounded-full bg-status-ok border-2 border-[#128C7E]" />
+        {/* Right: thread + composer */}
+        <div className="flex-1 bg-surface-1 border border-surface-4 rounded-[14px] flex flex-col overflow-hidden">
+          {selConv && lead ? (
+            <>
+              {/* Thread header */}
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-4"
+                style={{ background:'rgba(37,211,102,.04)' }}>
+                <div className="w-[34px] h-[34px] rounded-full bg-[#25D366] flex items-center justify-center text-[14px] font-extrabold text-white">
+                  {toInitials(lead.name)}
+                </div>
+                <div className="flex-1">
+                  <p className="text-[13px] font-bold text-text-primary">{lead.name}</p>
+                  <p className="text-[10.5px] text-text-muted">{lead.phone || '—'}</p>
+                </div>
+                {lead.phone && (
+                  <button onClick={() => window.open(`tel:${lead.phone}`)}
+                    className="text-[11px] font-bold text-text-muted hover:text-text-primary bg-surface-2 border border-surface-4 px-3 py-1.5 rounded-[7px] transition-colors">
+                    📞 Call
+                  </button>
                 )}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-extrabold text-[14px] text-white">{conv.name}</div>
-                <div className="text-[11.5px] text-white/70">
-                  {conv.online ? 'Online' : 'Last seen recently'} · {conv.phone}
-                </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto px-4 py-3"
+                style={{ background:'url("data:image/svg+xml,%3Csvg width=\'20\' height=\'20\' viewBox=\'0 0 20 20\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.02\' fill-rule=\'evenodd\'%3E%3Ccircle cx=\'3\' cy=\'3\' r=\'3\'/%3E%3C/g%3E%3C/svg%3E")' }}>
+                {isLoadingThread
+                  ? <div className="flex justify-center pt-10"><Spinner size={24} /></div>
+                  : (
+                    <>
+                      {thread.map((msg) => {
+                        const isOut = msg.direction === 'out';
+                        const time  = msg.created_at
+                          ? new Date(msg.created_at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
+                          : 'Now';
+                        return (
+                          <div key={msg.id} className={cn('flex mb-3', isOut ? 'justify-end' : 'justify-start')}>
+                            <div className={cn('max-w-[72%] px-3 py-2 rounded-[12px] text-[12.5px] leading-[1.5] shadow-sm',
+                              isOut
+                                ? 'text-[#111] rounded-br-[4px]'
+                                : 'bg-surface-2 border border-surface-4 text-text-primary rounded-bl-[4px]')}
+                              style={isOut ? { background:'linear-gradient(135deg,#25D366,#20c65a)' } : {}}>
+                              <p>{msg.body}</p>
+                              <p className={cn('text-[9.5px] mt-1 font-medium', isOut ? 'text-[rgba(0,0,0,.5)] text-right' : 'text-text-muted')}>
+                                {time}{isOut ? ' ✓✓' : ''}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {thread.length === 0 && (
+                        <div className="flex flex-col items-center justify-center h-full text-text-muted">
+                          <Icon name="wa" size={28} color="#4E4B58" />
+                          <p className="text-[13px] font-semibold mt-3">No messages yet</p>
+                        </div>
+                      )}
+                      <div ref={endRef} />
+                    </>
+                  )
+                }
               </div>
-              <div className="flex gap-2">
-                {['Call','View Lead'].map((l) => (
-                  <button
-                    key={l}
-                    className="text-[11px] font-bold text-white bg-white/15 border-none rounded-[7px] px-[8px] py-[3px] cursor-pointer hover:bg-white/25 transition-colors"
-                  >
-                    {l}
+
+              {/* Quick replies */}
+              <div className="px-4 pt-2 flex gap-1.5 overflow-x-auto border-t border-surface-4">
+                {QUICK_REPLIES.map((qr) => (
+                  <button key={qr} onClick={() => send(qr)}
+                    className="shrink-0 text-[10.5px] font-bold px-2.5 py-[5px] rounded-full border border-[rgba(37,211,102,.3)] text-[#25D366] bg-[rgba(37,211,102,.07)] hover:bg-[rgba(37,211,102,.14)] transition-colors whitespace-nowrap mb-2">
+                    {qr}
                   </button>
                 ))}
               </div>
-            </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-[18px] py-4 flex flex-col gap-2">
-              {messages.map((m, i) => (
-                <div key={i} className={cn('flex', m.from === 'me' ? 'justify-end' : 'justify-start')}>
-                  <div className={m.from === 'me' ? 'wa-bubble-out' : 'wa-bubble-in'}>
-                    <p className="text-[13.5px] leading-[1.55]" style={{ color: m.from === 'me' ? '#fff' : G.t0 }}>
-                      {m.text}
-                    </p>
-                    <p className="text-[10px] mt-1 text-right" style={{ color: m.from === 'me' ? 'rgba(255,255,255,.6)' : G.t2 }}>
-                      {m.tm}{m.from === 'me' && ' ✓✓'}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              <div ref={endRef} />
-            </div>
-
-            {/* Input */}
-            <div className="px-[15px] py-[11px] border-t border-surface-4 bg-surface-2">
-              {/* Quick actions + AI */}
-              <div className="flex gap-2 mb-2 flex-wrap">
-                <Button variant="ghost" size="xs" onClick={generateReply} disabled={aiLoad}>
-                  {aiLoad ? <><Spinner size={11} />Generating…</> : <><Icon name="ai" size={11} color={G.pu} />AI Reply</>}
-                </Button>
-                {QUICK_REPLIES.map((q) => (
-                  <button
-                    key={q}
-                    onClick={() => setText(q)}
-                    className="text-[10px] font-bold text-text-secondary bg-surface-3 border border-surface-4 rounded-[7px] px-2 py-[3px] cursor-pointer hover:bg-surface-4 transition-colors"
-                  >
-                    {q}
+              {/* Composer */}
+              <div className="px-3 pb-3">
+                <div className="flex gap-2 items-end">
+                  <button onClick={generateAiReply} disabled={aiLoad}
+                    className="w-8 h-8 rounded-full bg-[rgba(124,58,237,.15)] border border-[rgba(124,58,237,.3)] flex items-center justify-center shrink-0 transition-colors hover:bg-[rgba(124,58,237,.25)]">
+                    {aiLoad ? <Spinner size={13} /> : <Icon name="ai" size={13} color={G.pu} />}
                   </button>
-                ))}
+                  <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+                    placeholder="Type a WhatsApp message… (Enter to send)"
+                    className="flex-1 bg-surface-2 border border-surface-4 rounded-[10px] px-3 py-2 text-[12.5px] text-text-primary outline-none focus:border-[#25D366] transition-colors resize-none placeholder:text-text-muted" />
+                  <Button onClick={() => send()} disabled={!text.trim() || isSending}
+                    style={{ background:'linear-gradient(135deg,#25D366,#20c65a)', border:'none', color:'#111' }}
+                    className="self-end">
+                    {isSending ? <Spinner size={13} /> : 'Send'}
+                  </Button>
+                </div>
               </div>
-
-              <div className="flex gap-2">
-                <input
-                  className="flex-1 bg-surface-3 border border-surface-4 rounded-[9px] px-[13px] py-[9px] text-text-primary font-sans text-[13.5px] font-semibold outline-none focus:border-gold transition-colors placeholder:text-text-muted placeholder:font-normal"
-                  placeholder="Type a message…"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && send()}
-                  aria-label="Message input"
-                />
-                <button
-                  onClick={send}
-                  aria-label="Send message"
-                  className="px-[15px] py-[9px] rounded-[9px] border-none cursor-pointer flex items-center gap-1 font-bold transition-colors hover:brightness-110"
-                  style={{ background: '#25D366', color: '#fff' }}
-                >
-                  <Icon name="send" size={14} color="#fff" />
-                </button>
-              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-text-muted">
+              <Icon name="wa" size={32} color="#4E4B58" />
+              <p className="text-[14px] font-semibold mt-4">Select a conversation</p>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
