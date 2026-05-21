@@ -1,22 +1,27 @@
 /**
- * AutoSys API Index
+ * AutoSys API Index — single source of truth for all API imports.
+ * Import everything from here: import { crmApi, salesApi } from '@/services/api';
  *
- * FIXES:
- *  1. blogApi and adminBlogApi were defined in blog.api.js and used throughout
- *     the blog/admin-blog pages, but were never exported from this index file.
- *     Any component importing from '@/services/api' would get undefined.
- *  2. Added missing newline at end of file (cosmetic).
+ * Rules:
+ *  - Each named export appears EXACTLY ONCE across all export lines.
+ *  - adminApi lives in admin.api.js only — NOT re-exported from global.api.js.
+ *  - websiteApi lives in global.api.js — exported here under that name.
  */
 
 export { default as client, getToken, setToken, clearToken } from './client';
-export { authApi }      from './auth.api';
-export { crmApi }       from './crm.api';
-export { salesApi, vehicleImageApi } from './sales.api';
-export { analyticsApi } from './analytics.api';
-export { marketingApi } from './marketing.api';
-export { adminApi }     from './admin.api';
-export { aiApi }        from './ai.api';
-export { blogApi, adminBlogApi } from './blog.api'; // FIX: was missing entirely
+
+// ── Feature-specific API modules ──────────────────────────────
+export { authApi }          from './auth.api';
+export { crmApi }           from './crm.api';
+export { salesApi }         from './sales.api';
+export { analyticsApi }     from './analytics.api';
+export { marketingApi }     from './marketing.api';
+export { adminApi }         from './admin.api';
+export { aiApi }            from './ai.api';
+export { blogApi, adminBlogApi } from './blog.api';
+
+// ── Global / shared API modules ───────────────────────────────
+// Note: adminApi is NOT included here — it comes from admin.api.js above.
 export {
   pricingApi,
   automationApi,
@@ -25,6 +30,4 @@ export {
   socialApi,
   globalPaymentApi,
   tenantApi,
-  websiteApi,
-  adminApi,
 } from './global.api';
