@@ -41,13 +41,6 @@ export const automationApi = {
   /** POST /automations/test-trigger */
   testTrigger: (trigger, payload = {}) =>
     client.post('/automations/test-trigger', { trigger, payload }),
-
-  // ── Friendly aliases used by AutomationPage ───────────────
-  getAutomations:      ()          => client.get('/automations'),
-  createAutomation:    (data)      => client.post('/automations', data),
-  updateAutomation:    (id, data)  => client.put(`/automations/${id}`, data),
-  deleteAutomation:    (id)        => client.delete(`/automations/${id}`),
-  toggleAutomation:    (id, enabled) => client.patch(`/automations/${id}`, { enabled }),
 };
 
 /* ── Calendar + Tasks API ───────────────────────────────────── */
