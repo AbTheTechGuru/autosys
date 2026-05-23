@@ -222,21 +222,23 @@ export function BlogPostEditor() {
     const finalStatus = publishStatus || form.status;
     setSaving(true);
     try {
+      // Use camelCase keys — backend route destructures camelCase
+      // blog.api.js toBackend() also handles the mapping as a safety net
       await savePost(isEditing ? id : null, {
-        title:          form.title,
-        slug:           form.slug || toSlug(form.title),
+        title:        form.title,
+        slug:         form.slug || toSlug(form.title),
         content,
-        excerpt:        form.excerpt,
-        featured_image: form.featuredImage,
-        author_name:    form.authorName,
-        author_bio:     form.authorBio,
-        status:         finalStatus,
-        category_slug:  form.categorySlug,
-        tags:           form.tags.split(',').map((t) => t.trim()).filter(Boolean),
-        featured:       form.featured,
-        meta_title:     form.metaTitle,
-        meta_desc:      form.metaDesc,
-        read_time:      calcReadTime(content),
+        excerpt:      form.excerpt,
+        featuredImage:form.featuredImage,
+        authorName:   form.authorName,
+        authorBio:    form.authorBio,
+        status:       finalStatus,
+        categorySlug: form.categorySlug,
+        tags:         form.tags.split(',').map((t) => t.trim()).filter(Boolean),
+        featured:     form.featured,
+        metaTitle:    form.metaTitle,
+        metaDesc:     form.metaDesc,
+        read_time:    calcReadTime(content),
       });
       toast(finalStatus === 'published' ? '🎉 Post published!' : '✅ Draft saved!');
       navigate('/app/admin/blog');
