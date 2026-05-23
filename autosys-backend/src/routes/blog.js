@@ -281,40 +281,78 @@ adminRouter.post('/', async (req, res) => {
   assertAdmin(req);
 
   const {
-    title, slug, content, excerpt, featuredImage,
-    authorName, authorBio, status = 'draft',
-    categorySlug, tags = [], featured = false,
-    metaTitle, metaDesc, ogImage,
+    title, slug, content, excerpt,
+    // Accept both camelCase (from frontend) and snake_case (legacy) field names
+    featuredImage, featured_image,
+    authorName,    author_name,
+    authorBio,     author_bio,
+    status = 'draft',
+    categorySlug,  category_slug,
+    tags = [], featured = false,
+    metaTitle,     meta_title,
+    metaDesc,      meta_desc,
+    ogImage,       og_image,
   } = req.body;
 
   if (!title) throw new AppError('title is required', 400, 'VALIDATION_ERROR');
 
+  // Normalise — prefer camelCase but accept snake_case fallback
+  const resolvedFeaturedImage = featuredImage  || featured_image  || null;
+  const resolvedAuthorName    = authorName     || author_name     || 'AutoSys Team';
+  const resolvedAuthorBio     = authorBio      || author_bio      || null;
+  const resolvedCategorySlug  = categorySlug   || category_slug   || null;
+  const resolvedMetaTitle     = metaTitle      || meta_title      || null;
+  const resolvedMetaDesc      = metaDesc       || meta_desc       || null;
+  const resolvedOgImage       = ogImage        || og_image        || null;
+
+  // Convert empty strings to null (prevents DB constraint issues)
+  const nullIfEmpty = (v) => (v === '' || v === undefined ? null : v);
+
   const baseSlug  = slug ? toSlug(slug) : toSlug(title);
   const finalSlug = await uniqueSlug(baseSlug);
+
+  // Verify the userId exists in users table before inserting.
+  // If it doesn't (e.g. JWT sub doesn't match users.id), set created_by to null
+  // rather than failing the entire insert with a FK violation.
+  let createdBy = req.auth.userId || null;
+  if (createdBy) {
+    const { data: userExists } = await supabase
+      .from('users').select('id').eq('id', createdBy).single();
+    if (!userExists) createdBy = null;
+  }
 
   const { data, error } = await supabase
     .from('blog_posts')
     .insert({
       title,
       slug:           finalSlug,
-      content:        content       || '',
-      excerpt:        excerpt       || '',
-      featured_image: featuredImage || null,
-      author_name:    authorName    || 'AutoSys Team',
-      author_bio:     authorBio     || null,
+      content:        content                          || '',
+      excerpt:        excerpt                          || '',
+      featured_image: nullIfEmpty(resolvedFeaturedImage),
+      author_name:    resolvedAuthorName,
+      author_bio:     nullIfEmpty(resolvedAuthorBio),
       status,
-      category_slug:  categorySlug  || null,
-      tags,
-      featured,
-      meta_title:     metaTitle     || null,
-      meta_desc:      metaDesc      || null,
-      og_image:       ogImage       || null,
-      created_by:     req.auth.userId,
+      category_slug:  nullIfEmpty(resolvedCategorySlug),
+      tags:           Array.isArray(tags) ? tags : [],
+      featured:       Boolean(featured),
+      meta_title:     nullIfEmpty(resolvedMetaTitle),
+      meta_desc:      nullIfEmpty(resolvedMetaDesc),
+      og_image:       nullIfEmpty(resolvedOgImage),
+      created_by:     createdBy,   // null-safe — won't violate FK constraint
     })
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    // Surface the real Supabase error so it appears in Render logs
+    console.error('[Blog] Create error:', JSON.stringify(error));
+    throw new AppError(
+      error.message || 'Failed to create blog post',
+      error.code === '23505' ? 409 : 500,
+      error.code || 'DB_ERROR',
+    );
+  }
+
   res.status(201).json({ post: data });
 });
 
@@ -323,11 +361,29 @@ adminRouter.put('/:id', async (req, res) => {
   assertAdmin(req);
 
   const {
-    title, slug, content, excerpt, featuredImage,
-    authorName, authorBio, status,
-    categorySlug, tags, featured,
-    metaTitle, metaDesc, ogImage,
+    title, slug, content, excerpt,
+    // Accept both camelCase and snake_case
+    featuredImage, featured_image,
+    authorName,    author_name,
+    authorBio,     author_bio,
+    status,
+    categorySlug,  category_slug,
+    tags, featured,
+    metaTitle,     meta_title,
+    metaDesc,      meta_desc,
+    ogImage,       og_image,
   } = req.body;
+
+  // Normalise camelCase vs snake_case
+  const resolvedFeaturedImage = featuredImage !== undefined ? featuredImage : featured_image;
+  const resolvedAuthorName    = authorName    !== undefined ? authorName    : author_name;
+  const resolvedAuthorBio     = authorBio     !== undefined ? authorBio     : author_bio;
+  const resolvedCategorySlug  = categorySlug  !== undefined ? categorySlug  : category_slug;
+  const resolvedMetaTitle     = metaTitle     !== undefined ? metaTitle     : meta_title;
+  const resolvedMetaDesc      = metaDesc      !== undefined ? metaDesc      : meta_desc;
+  const resolvedOgImage       = ogImage       !== undefined ? ogImage       : og_image;
+
+  const nullIfEmpty = (v) => (v === '' || v === undefined ? null : v);
 
   // Re-slug only if slug field explicitly provided
   let finalSlug;
@@ -337,20 +393,24 @@ adminRouter.put('/:id', async (req, res) => {
   }
 
   const updates = {};
-  if (title        !== undefined) updates.title          = title;
-  if (finalSlug    !== undefined) updates.slug           = finalSlug;
-  if (content      !== undefined) updates.content        = content;
-  if (excerpt      !== undefined) updates.excerpt        = excerpt;
-  if (featuredImage!== undefined) updates.featured_image = featuredImage;
-  if (authorName   !== undefined) updates.author_name    = authorName;
-  if (authorBio    !== undefined) updates.author_bio     = authorBio;
-  if (status       !== undefined) updates.status         = status;
-  if (categorySlug !== undefined) updates.category_slug  = categorySlug;
-  if (tags         !== undefined) updates.tags           = tags;
-  if (featured     !== undefined) updates.featured       = featured;
-  if (metaTitle    !== undefined) updates.meta_title     = metaTitle;
-  if (metaDesc     !== undefined) updates.meta_desc      = metaDesc;
-  if (ogImage      !== undefined) updates.og_image       = ogImage;
+  if (title                      !== undefined) updates.title          = title;
+  if (finalSlug                  !== undefined) updates.slug           = finalSlug;
+  if (content                    !== undefined) updates.content        = content;
+  if (excerpt                    !== undefined) updates.excerpt        = excerpt;
+  if (resolvedFeaturedImage      !== undefined) updates.featured_image = nullIfEmpty(resolvedFeaturedImage);
+  if (resolvedAuthorName         !== undefined) updates.author_name    = resolvedAuthorName || 'AutoSys Team';
+  if (resolvedAuthorBio          !== undefined) updates.author_bio     = nullIfEmpty(resolvedAuthorBio);
+  if (status                     !== undefined) updates.status         = status;
+  if (resolvedCategorySlug       !== undefined) updates.category_slug  = nullIfEmpty(resolvedCategorySlug);
+  if (tags                       !== undefined) updates.tags           = Array.isArray(tags) ? tags : [];
+  if (featured                   !== undefined) updates.featured       = Boolean(featured);
+  if (resolvedMetaTitle          !== undefined) updates.meta_title     = nullIfEmpty(resolvedMetaTitle);
+  if (resolvedMetaDesc           !== undefined) updates.meta_desc      = nullIfEmpty(resolvedMetaDesc);
+  if (resolvedOgImage            !== undefined) updates.og_image       = nullIfEmpty(resolvedOgImage);
+
+  if (Object.keys(updates).length === 0) {
+    return res.json({ post: { id: req.params.id, message: 'Nothing to update' } });
+  }
 
   const { data, error } = await supabase
     .from('blog_posts')
@@ -359,7 +419,16 @@ adminRouter.put('/:id', async (req, res) => {
     .select()
     .single();
 
-  if (error || !data) throw new NotFoundError('Blog post');
+  if (error) {
+    console.error('[Blog] Update error:', JSON.stringify(error));
+    throw new AppError(
+      error.message || 'Failed to update blog post',
+      500,
+      error.code || 'DB_ERROR',
+    );
+  }
+  if (!data) throw new NotFoundError('Blog post');
+
   res.json({ post: data });
 });
 
