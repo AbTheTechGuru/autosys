@@ -32,29 +32,18 @@ app.use(helmet({
 }));
 
 // ── CORS ──────────────────────────────────────────────────────
-
-const allowedOrigins = (process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map(o => o.trim())
-  .filter(Boolean);
-
+const allowed = env.CORS_ORIGIN.split(',').map((s) => s.trim());
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman, curl)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error(`CORS blocked: ${origin}`));
+  origin(origin, cb) {
+    if (!origin && env.NODE_ENV === 'development') return cb(null, true);
+    if (!origin || allowed.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS: origin ${origin} blocked`));
   },
-  credentials: true,   // ← required for cookies/JWT headers
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials:    true,
+  methods:        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Idempotency-Key', 'X-Dealer-Id'],
+  exposedHeaders: ['X-Total-Count', 'X-Request-Id'],
 }));
-
-// Handle preflight for ALL routes — must be BEFORE your routes
-app.options('*', cors());
-
 
 // ── Body parsing ──────────────────────────────────────────────
 // Webhook routes need raw body — skip json parsing for them
@@ -186,11 +175,11 @@ app.use(
   require('./src/routes/admin'),
 );
 
-// ── Blog admin routes (auth required) ────────────────────────
+// ── Blog admin routes ─────────────────────────────────────────
+// Note: blogAdminRouter calls authenticate + assertAdmin internally.
+// We do NOT add authenticate/requireRole here again to avoid double-auth conflicts.
 app.use(
   `/${env.API_VERSION}/admin/blog`,
-  authenticate,
-  requireRole(['owner', 'admin', 'superadmin']),
   blogAdminRouter,
 );
 
