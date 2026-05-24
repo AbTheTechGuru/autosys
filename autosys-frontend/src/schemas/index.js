@@ -25,7 +25,7 @@ export const vehicleSchema = z.object({
   mileage:      z.coerce.number().min(0, 'Mileage cannot be negative'),
   fuel_type:    z.enum(['petrol', 'diesel', 'hybrid', 'electric', 'cng']),
   transmission: z.enum(['automatic', 'manual']),
-  condition:    z.enum(['foreign_used', 'locally_used', 'brand_new']),
+  condition:    z.enum(['foreign-used', 'nigerian-used', 'brand-new']),
   status:       z.enum(['available', 'reserved', 'sold']).default('available'),
   color:        z.string().max(40).optional(),
   description:  z.string().max(2000).optional(),
@@ -40,8 +40,8 @@ export const leadSchema = z.object({
   email:            z.string().email().optional().or(z.literal('')),
   vehicle_interest: z.string().max(200).optional(),
   budget:           z.coerce.number().min(0).optional(),
-  source:           z.enum(['website', 'whatsapp', 'referral', 'instagram', 'facebook', 'walkin', 'phone', 'other']).default('other'),
-  stage:            z.enum(['new', 'contacted', 'negotiating', 'closed_won', 'closed_lost']).default('new'),
+  source:           z.enum(['website', 'whatsapp', 'referral', 'instagram', 'facebook', 'walk-in', 'phone', 'other']).default('other'),
+  stage:            z.enum(['new', 'contacted', 'negotiation', 'closed_won', 'closed_lost']).default('new'),
   notes:            z.string().max(2000).optional(),
 });
 
