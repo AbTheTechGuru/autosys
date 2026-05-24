@@ -1,245 +1,158 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Button }  from '@/shared/components/ui/Button';
-import { Badge }   from '@/shared/components/ui/Badge';
-import { Icon }    from '@/shared/components/ui/Icon';
-import { Tabs }    from '@/shared/components/ui/Tabs';
+import { useState, useEffect, useCallback } from 'react';
+import { Button } from '@/shared/components/ui/Button';
+import { Icon }   from '@/shared/components/ui/Icon';
+import { Tabs }   from '@/shared/components/ui/Tabs';
 import { Spinner } from '@/shared/components/ui/Spinner';
-import { BarChart } from '@/shared/components/charts/BarChart';
 import { useToast } from '@/context/ToastContext';
-import client from '@/services/api/client';
-import { analyticsApi } from '@/services/api/index';
-import { fmtM } from '@/shared/utils/format';
-import { G }    from '@/shared/utils/tokens';
-import { MONTHS, REVENUE_DATA } from '@/shared/constants';
-import { cn }   from '@/shared/utils/cn';
+import { fmtM }    from '@/shared/utils/format';
+import { G }       from '@/shared/utils/tokens';
+import { paymentsApi } from '@/services/api';
 
-const PAY_TABS  = [{ key:'transactions', label:'Transactions' }, { key:'analytics', label:'Analytics' }];
-const STATUS_COLOR = { success:'#16A34A', Success:'#16A34A', pending:'#F59E0B', Pending:'#F59E0B', failed:'#EF4444', Failed:'#EF4444' };
-
-// kobo → naira
-const fromKobo = (v) => Math.round((v || 0) / 100);
-
-function ProgressBar({ label, pct, color, animated }) {
-  return (
-    <div className="mb-3">
-      <div className="flex justify-between text-[12.5px] mb-1">
-        <span className="text-text-secondary">{label}</span>
-        <span className="font-extrabold">{pct}%</span>
-      </div>
-      <div className="h-[4px] bg-surface-5 rounded-[2px] overflow-hidden">
-        <div className="h-full rounded-[2px] transition-[width] duration-[1s]"
-          style={{ width: animated ? `${pct}%` : '0%', background: `linear-gradient(90deg,${color}80,${color})` }} />
-      </div>
-    </div>
-  );
-}
+const STATUS_COLORS = { Success:'#16A34A', Pending:'#F59E0B', Failed:'#EF4444', success:'#16A34A', pending:'#F59E0B', failed:'#EF4444' };
+const PAY_TABS = [{ key:'transactions',label:'Transactions'},{ key:'analytics',label:'Analytics'}];
 
 export function PaymentsPage() {
   const toast = useToast();
-  const [tab,        setTab]        = useState('transactions');
-  const [txns,       setTxns]       = useState([]);
-  const [summary,    setSummary]    = useState(null);
-  const [revenueData, setRevData]   = useState(REVENUE_DATA);
-  const [revenueLabels, setRevLabels] = useState(MONTHS);
-  const [isLoading,  setIsLoading]  = useState(true);
-  const [anim,       setAnim]       = useState(false);
-  const [page,       setPage]       = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-  const PER_PAGE = 20;
+  const [tab,    setTab]    = useState('transactions');
+  const [txns,   setTxns]   = useState([]);
+  const [summary,setSummary]= useState(null);
+  const [loading,setLoading]= useState(true);
+  const [anim,   setAnim]   = useState(false);
 
-  useEffect(() => { const t = setTimeout(() => setAnim(true), 200); return () => clearTimeout(t); }, []);
-
-  const fetchTransactions = useCallback(async () => {
-    setIsLoading(true);
+  const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
-      const [txnRes, sumRes, revRes] = await Promise.allSettled([
-        client.get('/payments', { params: { page, limit: PER_PAGE } }),
-        client.get('/payments/summary'),
-        analyticsApi.revenue('30d'),
+      const [txnsRes, sumRes] = await Promise.allSettled([
+        paymentsApi.getTransactions({ limit:20 }),
+        paymentsApi.getSummary(),
       ]);
-
-      if (txnRes.status === 'fulfilled') {
-        const data  = txnRes.value.data;
-        const total = parseInt(txnRes.value.headers?.['x-total-count'] || data.total || 0);
-        const mapped = (data.transactions ?? []).map((t) => ({
-          id:     t.reference || t.id,
-          c:      t.metadata?.customer_name || t.email?.split('@')[0] || 'Customer',
-          car:    t.metadata?.vehicle || '—',
-          amt:    fromKobo(t.amount),
-          gw:     t.gateway?.charAt(0).toUpperCase() + t.gateway?.slice(1) || 'Paystack',
-          method: t.channel || t.metadata?.method || 'Transfer',
-          status: t.status?.charAt(0).toUpperCase() + t.status?.slice(1) || 'Pending',
-          d:      new Date(t.created_at).toLocaleDateString('en-NG', { month:'short', day:'numeric' }),
-        }));
-        setTxns(mapped);
-        setTotalCount(total);
-      }
-
-      if (sumRes.status === 'fulfilled') {
-        setSummary(sumRes.value.data);
-      }
-
-      if (revRes.status === 'fulfilled') {
-        const monthly = revRes.value.data.monthly ?? {};
-        const entries = Object.entries(monthly).sort(([a],[b]) => a.localeCompare(b)).slice(-12);
-        if (entries.length > 0) {
-          setRevLabels(entries.map(([k]) => k.slice(5)));
-          setRevData(entries.map(([,v]) => Math.round(fromKobo(v) / 1000000)));
-        }
-      }
+      if (txnsRes.status==='fulfilled') setTxns(txnsRes.value.data.transactions ?? txnsRes.value.data ?? []);
+      if (sumRes.status==='fulfilled')  setSummary(sumRes.value.data);
     } catch (err) {
-      toast(err.response?.data?.message || 'Failed to load payments', 'danger');
+      toast(err.response?.data?.message||'Failed to load payments','danger');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
+      setTimeout(()=>setAnim(true),200);
     }
-  }, [page, toast]);
+  }, []);
 
-  useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
+  useEffect(()=>{ fetchData(); },[fetchData]);
 
-  const totalRevenue  = summary ? fromKobo(summary.total_revenue)    : 0;
-  const monthRevenue  = summary ? fromKobo(summary.this_month)       : 0;
-  const pendingAmount = summary ? fromKobo(summary.pending)          : 0;
-  const txnCount      = summary?.count ?? txns.length;
+  const handleExport = async () => {
+    try {
+      const rows = [['ID','Customer','Amount','Status','Gateway','Date'],...txns.map(t=>[t.id||t.reference,t.customer||t.lead?.name||'—',t.amount||t.amt,t.status,t.gateway||t.gw||'—',t.created_at||t.d||'—'])];
+      const csv  = rows.map(r=>r.join(',')).join('\n');
+      const blob = new Blob([csv],{type:'text/csv'});
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a'); a.href=url; a.download='transactions.csv'; a.click();
+      toast('Exported!','ok');
+    } catch { toast('Export failed','danger'); }
+  };
 
-  const paystackPct    = txns.length ? Math.round((txns.filter((t) => t.gw === 'Paystack').length / txns.length) * 100) : 65;
-  const flutterwavePct = txns.length ? Math.round((txns.filter((t) => t.gw === 'Flutterwave').length / txns.length) * 100) : 28;
-  const successRate    = txns.length ? Math.round((txns.filter((t) => t.status === 'Success').length / txns.length) * 100) : 94;
+  const sum = summary || {};
+  const totalRev  = sum.total_revenue  || sum.total || 0;
+  const successCt = sum.success_count  || txns.filter(t=>t.status?.toLowerCase()==='success').length;
+  const pendingCt = sum.pending_count  || txns.filter(t=>t.status?.toLowerCase()==='pending').length;
+  const failCt    = sum.failed_count   || txns.filter(t=>t.status?.toLowerCase()==='failed').length;
 
   return (
     <div className="max-w-[1500px] px-4 md:px-[22px] pt-[22px] pb-8">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div>
           <h2 className="font-display text-[23px] font-bold">Payments</h2>
           <p className="text-text-secondary text-[12.5px] mt-[3px]">Paystack · Flutterwave · Live mode</p>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => { fetchTransactions(); toast('Refreshed!'); }}>
-          <Icon name="refresh" size={13} />Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="sm" onClick={fetchData} disabled={loading}>{loading?<Spinner size={12}/>:<Icon name="refresh" size={12}/>}</Button>
+          <Button variant="ghost" size="sm" onClick={handleExport}><Icon name="dl" size={13}/>Export</Button>
+        </div>
       </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        {isLoading ? Array(4).fill(0).map((_, i) => (
-          <div key={i} className="h-[90px] bg-surface-2 border border-surface-4 rounded-[14px] animate-pulse" />
-        )) : [
-          ['Total Revenue',  fmtM(totalRevenue),  G.g  ],
-          ['This Month',     fmtM(monthRevenue),  G.bl ],
-          ['Pending',        fmtM(pendingAmount), G.wa ],
-          ['Transactions',   String(txnCount),    G.ok ],
-        ].map(([l, v, c]) => (
+        {[
+          ['Total Revenue',  loading?'…':fmtM((totalRev||0)/100), G.ok, 'pay'],
+          ['Successful',     loading?'…':successCt,               G.g,  'check'],
+          ['Pending',        loading?'…':pendingCt,               G.wa, 'activity'],
+          ['Failed',         loading?'…':failCt,                  G.er, 'x'],
+        ].map(([l,v,c,ic])=>(
           <div key={l} className="bg-surface-2 border border-surface-4 rounded-[14px] p-[18px]">
-            <div className="text-[10.5px] text-text-secondary font-extrabold uppercase tracking-[1px] mb-[5px]">{l}</div>
-            <div className="font-display text-[22px] font-bold" style={{ color:c }}>{v}</div>
+            <div className="flex justify-between items-start mb-2"><div className="text-[10.5px] text-text-secondary font-extrabold uppercase tracking-[1px]">{l}</div><Icon name={ic} size={16} color={c}/></div>
+            {loading?<div className="h-7 bg-surface-4 rounded w-20 animate-pulse"/>:<div className="font-display text-[26px] font-bold" style={{color:c}}>{v}</div>}
           </div>
         ))}
       </div>
 
-      <Tabs tabs={PAY_TABS} active={tab} onChange={setTab} className="mb-5" />
+      <Tabs tabs={PAY_TABS} active={tab} onChange={setTab} className="mb-5"/>
 
-      {/* ── Transactions tab ─────────────────────────────── */}
-      {tab === 'transactions' && (
+      {tab==='transactions'&&(
         <>
           {/* Mobile cards */}
-          <div className="flex flex-col gap-3 md:hidden mb-6">
-            {isLoading ? Array(4).fill(0).map((_, i) => (
-              <div key={i} className="h-[90px] bg-surface-2 border border-surface-4 rounded-[12px] animate-pulse" />
-            )) : txns.map((t) => (
-              <div key={t.id} className="bg-surface-2 border border-surface-4 rounded-[12px] p-4">
+          <div className="flex flex-col gap-3 md:hidden">
+            {loading&&Array(3).fill(0).map((_,i)=><div key={i} className="h-20 bg-surface-2 border border-surface-4 rounded-[12px] animate-pulse"/>)}
+            {!loading&&txns.map((t,i)=>(
+              <div key={t.id||i} className="bg-surface-2 border border-surface-4 rounded-[12px] p-4">
                 <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <p className="font-bold text-[13px]">{t.c}</p>
-                    <p className="text-[11.5px] text-text-muted">{t.car}</p>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-1 rounded-full"
-                    style={{ background:`${STATUS_COLOR[t.status] ?? '#6B7280'}18`, color:STATUS_COLOR[t.status] ?? '#6B7280' }}>
-                    {t.status}
-                  </span>
+                  <div><p className="font-bold text-[13px]">{t.customer||t.lead?.name||'—'}</p><p className="text-[11px] text-text-muted">{t.id||t.reference||'—'}</p></div>
+                  <span className="text-[11px] font-bold px-2 py-[2px] rounded-[5px]" style={{color:STATUS_COLORS[t.status]||G.t2,background:`${STATUS_COLORS[t.status]||G.t2}18`}}>{t.status}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-display text-[17px] font-bold text-gold">{fmtM(t.amt)}</span>
-                  <div className="text-[11px] text-text-muted text-right">
-                    <p>{t.gw}</p><p>{t.d}</p>
-                  </div>
+                <div className="flex justify-between text-[12px]">
+                  <span className="font-extrabold" style={{color:G.ok}}>{fmtM((t.amount||t.amt||0)/100)}</span>
+                  <span className="text-text-muted">{t.gateway||t.gw||'—'} · {t.created_at?new Date(t.created_at).toLocaleDateString('en-NG',{day:'numeric',month:'short'}):t.d||'—'}</span>
                 </div>
               </div>
             ))}
+            {!loading&&txns.length===0&&<p className="text-center text-text-muted py-8">No transactions yet</p>}
           </div>
 
           {/* Desktop table */}
-          <div className="hidden md:block border border-surface-4 rounded-[12px] overflow-x-auto mb-4">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  {['Ref','Customer','Vehicle','Amount','Gateway','Method','Status','Date'].map((h) => (
-                    <th key={h} className="text-left px-[14px] py-[9px] text-[9.5px] font-extrabold uppercase tracking-[1px] text-text-muted bg-surface-3 border-b border-surface-4">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
+          <div className="hidden md:block bg-surface-2 border border-surface-4 rounded-[14px] overflow-x-auto">
+            <table className="w-full">
+              <thead><tr className="border-b border-surface-4" style={{background:G.s3}}>{['ID','Customer','Vehicle','Amount','Gateway','Method','Status','Date'].map(h=><th key={h} className="text-left py-3 px-3 text-[10.5px] font-extrabold uppercase tracking-[1px] text-text-muted">{h}</th>)}</tr></thead>
               <tbody>
-                {isLoading ? Array(5).fill(0).map((_, i) => (
-                  <tr key={i} className="border-b border-surface-4">
-                    {Array(8).fill(0).map((_, j) => (
-                      <td key={j} className="px-[14px] py-3">
-                        <div className="h-4 bg-surface-3 rounded animate-pulse" />
-                      </td>
-                    ))}
-                  </tr>
-                )) : txns.map((t) => (
-                  <tr key={t.id} className="border-b border-[rgba(33,33,46,.4)] last:border-0 hover:bg-[rgba(255,255,255,.01)]">
-                    <td className="px-[14px] py-3 font-mono text-[11px] text-text-muted">{t.id}</td>
-                    <td className="px-[14px] py-3 font-semibold">{t.c}</td>
-                    <td className="px-[14px] py-3 text-text-secondary">{t.car}</td>
-                    <td className="px-[14px] py-3 text-gold font-extrabold">{fmtM(t.amt)}</td>
-                    <td className="px-[14px] py-3 text-text-secondary">{t.gw}</td>
-                    <td className="px-[14px] py-3 text-text-secondary">{t.method}</td>
-                    <td className="px-[14px] py-3">
-                      <span className="text-[10px] font-bold px-[7px] py-[3px] rounded-full"
-                        style={{ background:`${STATUS_COLOR[t.status] ?? '#6B7280'}18`, color:STATUS_COLOR[t.status] ?? '#6B7280' }}>
-                        {t.status}
-                      </span>
-                    </td>
-                    <td className="px-[14px] py-3 text-text-muted text-[12px]">{t.d}</td>
+                {loading&&Array(4).fill(0).map((_,i)=><tr key={i}><td colSpan={8} className="px-3 py-3"><div className="h-8 bg-surface-3 rounded animate-pulse"/></td></tr>)}
+                {!loading&&txns.map((t,i)=>(
+                  <tr key={t.id||i} className="border-b border-surface-4 last:border-0 hover:bg-surface-3 transition-colors">
+                    <td className="py-3 px-3 font-mono text-[11px] text-text-muted">{(t.id||t.reference||'—').toString().slice(-8)}</td>
+                    <td className="py-3 px-3 font-semibold text-[13px]">{t.customer||t.lead?.name||'—'}</td>
+                    <td className="py-3 px-3 text-[12px] text-text-muted">{t.vehicle||t.car||'—'}</td>
+                    <td className="py-3 px-3 font-extrabold" style={{color:G.ok}}>{fmtM((t.amount||t.amt||0)/100)}</td>
+                    <td className="py-3 px-3 text-[12px]">{t.gateway||t.gw||'—'}</td>
+                    <td className="py-3 px-3 text-[12px] text-text-muted">{t.method||'—'}</td>
+                    <td className="py-3 px-3"><span className="text-[11px] font-bold px-2 py-[2px] rounded-[5px]" style={{color:STATUS_COLORS[t.status]||G.t2,background:`${STATUS_COLORS[t.status]||G.t2}18`}}>{t.status}</span></td>
+                    <td className="py-3 px-3 text-[12px] text-text-muted">{t.created_at?new Date(t.created_at).toLocaleDateString('en-NG',{day:'numeric',month:'short'}):t.d||'—'}</td>
                   </tr>
                 ))}
+                {!loading&&txns.length===0&&<tr><td colSpan={8} className="py-8 text-center text-text-muted">No transactions yet</td></tr>}
               </tbody>
             </table>
           </div>
-
-          {/* Pagination */}
-          {totalCount > PER_PAGE && (
-            <div className="flex items-center justify-between mt-3">
-              <p className="text-[12px] text-text-muted">
-                Showing {((page - 1) * PER_PAGE) + 1}–{Math.min(page * PER_PAGE, totalCount)} of {totalCount}
-              </p>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>← Prev</Button>
-                <Button variant="ghost" size="sm" disabled={page * PER_PAGE >= totalCount} onClick={() => setPage((p) => p + 1)}>Next →</Button>
-              </div>
-            </div>
-          )}
         </>
       )}
 
-      {/* ── Analytics tab ────────────────────────────────── */}
-      {tab === 'analytics' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2 bg-surface-2 border border-surface-4 rounded-[14px] p-5">
-            <div className="flex justify-between items-center mb-4">
-              <div className="font-display text-[18px] font-bold">Revenue Trend</div>
-              <div className="text-[13px] text-text-secondary">
-                Total: <span className="text-gold font-extrabold">{fmtM(totalRevenue)}</span>
-              </div>
-            </div>
-            <BarChart data={revenueData} labels={revenueLabels} height={160} />
+      {tab==='analytics'&&(
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-5">
+            <h3 className="font-bold text-[15px] mb-4">Gateway Performance</h3>
+            {loading?<div className="space-y-3">{Array(3).fill(0).map((_,i)=><div key={i} className="h-8 bg-surface-3 rounded animate-pulse"/>)}</div>:(
+              (sum.by_gateway||[{name:'Paystack',pct:65,color:G.ok},{name:'Flutterwave',pct:30,color:G.bl},{name:'Manual',pct:5,color:G.t2}]).map((g,i)=>(
+                <div key={i} className="mb-3">
+                  <div className="flex justify-between text-[12.5px] mb-1"><span className="text-text-secondary">{g.name}</span><span className="font-extrabold">{g.pct}%</span></div>
+                  <div className="h-[5px] bg-surface-5 rounded-full overflow-hidden"><div className="h-full rounded-full transition-[width] duration-[1s]" style={{width:anim?`${g.pct}%`:'0%',background:g.color}}/></div>
+                </div>
+              ))
+            )}
           </div>
           <div className="bg-surface-2 border border-surface-4 rounded-[14px] p-5">
-            <div className="font-display text-[18px] font-bold mb-5">Gateway Split</div>
-            <ProgressBar label="Paystack"    pct={paystackPct}    color={G.g}  animated={anim} />
-            <ProgressBar label="Flutterwave" pct={flutterwavePct} color={G.bl} animated={anim} />
-            <ProgressBar label="Success Rate" pct={successRate}    color={G.ok} animated={anim} />
+            <h3 className="font-bold text-[15px] mb-4">Payment Methods</h3>
+            {loading?<div className="space-y-3">{Array(3).fill(0).map((_,i)=><div key={i} className="h-8 bg-surface-3 rounded animate-pulse"/>)}</div>:(
+              (sum.by_method||[{name:'Bank Transfer',pct:55,color:G.g},{name:'Card',pct:30,color:G.pu},{name:'USSD',pct:15,color:G.wa}]).map((m,i)=>(
+                <div key={i} className="mb-3">
+                  <div className="flex justify-between text-[12.5px] mb-1"><span className="text-text-secondary">{m.name}</span><span className="font-extrabold">{m.pct}%</span></div>
+                  <div className="h-[5px] bg-surface-5 rounded-full overflow-hidden"><div className="h-full rounded-full transition-[width] duration-[1s]" style={{width:anim?`${m.pct}%`:'0%',background:m.color}}/></div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
