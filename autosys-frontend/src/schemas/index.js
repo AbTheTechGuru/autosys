@@ -36,7 +36,7 @@ export const vehicleSchema = z.object({
 // Field names match backend createLeadSchema.
 export const leadSchema = z.object({
   name:             z.string().min(2, 'Name is required').max(100),
-  phone:            z.string().min(7, 'Phone number required').max(20),
+  phone:            z.string().min(7, 'Phone number required').max(20).regex(/^[0-9+][0-9]{6,18}$/, 'Enter a valid phone number (e.g. 09051750743)'),
   email:            z.string().email().optional().or(z.literal('')),
   vehicle_interest: z.string().max(200).optional(),
   budget:           z.coerce.number().min(0).optional(),
