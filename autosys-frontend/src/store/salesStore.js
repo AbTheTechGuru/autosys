@@ -17,7 +17,7 @@ const SEED_PIPELINE = {
   Delivered:   [{ id:'dp-5', t:'Ngozi – Ranger',   v:22000000,c:'NE',tag:'Done',   ag:'SK',d:5 },{ id:'dp-6',t:'Kunle – Tucson',v:16000000,c:'KA',tag:'Done',ag:'JD',d:7 }],
 };
 
-// Kobo → naira
+// Kobo → naira conversion
 const fromKobo = (amount) => Math.round(amount / 100);
 
 export const useSalesStore = create((set, get) => ({
@@ -35,9 +35,7 @@ export const useSalesStore = create((set, get) => ({
     const { vehicles, statusFilter, searchQuery } = get();
     return vehicles.filter((v) => {
       const matchStatus = statusFilter === 'All' || v.status === statusFilter;
-      const matchSearch = !searchQuery || v.t.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        v.brand?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        v.model?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchSearch = !searchQuery || v.t.toLowerCase().includes(searchQuery.toLowerCase());
       return matchStatus && matchSearch;
     });
   },
@@ -50,83 +48,24 @@ export const useSalesStore = create((set, get) => ({
   setStatusFilter: (f) => set({ statusFilter: f }),
   setSearch:       (q) => set({ searchQuery: q }),
 
-  // ── Add vehicle (optimistic + backend persist) ─────────────
-  addVehicle: async (vehicleData) => {
-    const EMOJI_MAP = { Toyota:'🚗', Mercedes:'🚙', BMW:'🚙', Lexus:'🚘', Honda:'🚗', Ford:'🛻' };
-    const STATUS_DISPLAY = { available:'Available', reserved:'Reserved', sold:'Sold' };
-    const FUEL_DISPLAY   = { petrol:'Petrol', diesel:'Diesel', hybrid:'Hybrid', electric:'Electric' };
-    const COND_DISPLAY   = { foreign_used:'Foreign Used', locally_used:'Used', brand_new:'New' };
-
-    const optimistic = {
-      id:     `local-${Date.now()}`,
-      t:      `${vehicleData.year} ${vehicleData.brand} ${vehicleData.model}`,
-      brand:  vehicleData.brand,
-      model:  vehicleData.model,
-      year:   Number(vehicleData.year),
-      price:  Number(vehicleData.price),
-      mileage:Number(vehicleData.mileage),
-      fuel:         FUEL_DISPLAY[vehicleData.fuel_type] || vehicleData.fuel_type,
-      fuel_type:    vehicleData.fuel_type,
-      trans:        vehicleData.transmission === 'automatic' ? 'Automatic' : 'Manual',
-      transmission: vehicleData.transmission,
-      cond:         COND_DISPLAY[vehicleData.condition] || vehicleData.condition,
-      condition:    vehicleData.condition,
-      status:       STATUS_DISPLAY[vehicleData.status] || 'Available',
-      color:        '#444',
-      e:            EMOJI_MAP[vehicleData.brand] || '🚗',
-      views: 0, inq: 0, days: 0,
+  // ── Vehicle mutations ──────────────────────────────────────
+  addVehicle: (vehicle) => {
+    const v = {
+      ...vehicle,
+      id: `local-${Date.now()}`,
+      e: '🚗', color: '#444', views: 0, inq: 0, days: 0,
+      price:   Number(vehicle.price),
+      mileage: Number(vehicle.mileage),
     };
-
-    set((s) => ({ vehicles: [optimistic, ...s.vehicles] }));
-
-    try {
-      // Backend expects price in kobo (multiply by 100)
-      const { data } = await salesApi.createVehicle({
-        brand:        vehicleData.brand,
-        model:        vehicleData.model,
-        year:         Number(vehicleData.year),
-        price:        Number(vehicleData.price) * 100, // kobo
-        mileage:      Number(vehicleData.mileage),
-        fuel_type:    vehicleData.fuel_type,
-        transmission: vehicleData.transmission,
-        condition:    vehicleData.condition,
-        status:       vehicleData.status || 'available',
-        description:  vehicleData.description || '',
-      });
-
-      const serverVehicle = data.vehicle ?? data;
-      set((s) => ({
-        vehicles: s.vehicles.map((v) =>
-          v.id === optimistic.id
-            ? { ...optimistic, id: serverVehicle.id }
-            : v
-        ),
-      }));
-      return serverVehicle;
-    } catch (err) {
-      console.warn('[Sales] addVehicle backend error — keeping local record:', err.message);
-      return optimistic;
-    }
+    set((s) => ({ vehicles: [v, ...s.vehicles] }));
+    return v;
   },
 
   updateVehicle: (id, updates) =>
     set((s) => ({ vehicles: s.vehicles.map((v) => v.id === id ? { ...v, ...updates } : v) })),
 
-  // ── Remove vehicle (optimistic + backend) ──────────────────
-  removeVehicle: async (id) => {
-    const prev = get().vehicles;
-    set((s) => ({ vehicles: s.vehicles.filter((v) => v.id !== id) }));
-
-    // Don't call API for seed/local IDs
-    if (id.startsWith('sv-') || id.startsWith('local-')) return;
-
-    try {
-      await salesApi.deleteVehicle(id);
-    } catch (err) {
-      set({ vehicles: prev });
-      throw err;
-    }
-  },
+  removeVehicle: (id) =>
+    set((s) => ({ vehicles: s.vehicles.filter((v) => v.id !== id) })),
 
   // ── Pipeline mutations ─────────────────────────────────────
   moveDeal: (dealId, fromCol, toCol) => {
@@ -159,31 +98,30 @@ export const useSalesStore = create((set, get) => ({
       const vehicles = data.vehicles ?? data;
       if (vehicles.length > 0) {
         const FUEL_MAP  = { petrol:'Petrol', diesel:'Diesel', hybrid:'Hybrid', electric:'Electric', cng:'CNG' };
-        const COND_MAP  = { foreign_used:'Foreign Used', locally_used:'Used', brand_new:'New' };
+        const COND_MAP  = { 'foreign-used':'Foreign Used', 'nigerian-used':'Nigerian Used', 'brand-new':'Brand New', foreign_used:'Foreign Used', locally_used:'Used', brand_new:'New' };
         const STAT_MAP  = { available:'Available', reserved:'Reserved', sold:'Sold' };
         const EMOJI_MAP = { Toyota:'🚗', Mercedes:'🚙', BMW:'🚙', Lexus:'🚘', Honda:'🚗', Ford:'🛻' };
 
         const mapped = vehicles.map((v) => ({
-          id:           v.id,
-          t:            `${v.year} ${v.brand} ${v.model}`,
-          brand:        v.brand,
-          model:        v.model,
-          year:         v.year,
-          price:        fromKobo(v.price),
-          mileage:      v.mileage,
+          id:      v.id,
+          t:       `${v.year} ${v.brand} ${v.model}`,
+          brand:   v.brand,
+          model:   v.model,
+          year:    v.year,
+          price:   fromKobo(v.price),
+          mileage: v.mileage,
           fuel:         FUEL_MAP[v.fuel_type]    || v.fuel_type,
           fuel_type:    v.fuel_type,
           trans:        v.transmission === 'automatic' ? 'Automatic' : 'Manual',
           transmission: v.transmission,
           cond:         COND_MAP[v.condition]    || v.condition,
           condition:    v.condition,
-          status:       STAT_MAP[v.status]       || v.status,
-          color:        v.color || '#444',
-          e:            EMOJI_MAP[v.brand] || '🚗',
-          views:        v.views_count   || 0,
-          inq:          v.inquiry_count || 0,
-          days:         v.days_listed   || 0,
-          image_urls:   v.image_urls    || [],
+          status:  STAT_MAP[v.status]       || v.status,
+          color:   v.color || '#444',
+          e:       EMOJI_MAP[v.brand] || '🚗',
+          views:   v.views_count    || 0,
+          inq:     v.inquiry_count  || 0,
+          days:    v.days_listed    || 0,
         }));
         set({ vehicles: mapped, dataLoaded: true });
       }
