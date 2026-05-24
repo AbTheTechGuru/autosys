@@ -23,7 +23,7 @@ const id        = z.string().uuid();
 const email     = z.string().email().toLowerCase().trim();
 const phone     = z.string()
   // FIX: generic E.164 — accepts any country code
-  .regex(/^\+?[1-9]\d{6,14}$/, 'Enter a valid phone number (e.g. +2348012345678)')
+  .regex(/^(\+?[0-9]\d{6,14})$/, 'Enter a valid phone number (e.g. 09051750743 or +2348012345678)')
   .optional();
 
 // ── Vehicle ───────────────────────────────────────────────────
