@@ -119,3 +119,66 @@ export const tenantApi = {
   /** GET /settings/dealer */
   getDealerConfig: () => client.get('/settings/dealer'),
 };
+
+/* ── Admin API (Super Admin only) ────────────────────────────── */
+export const adminApi = {
+  getStats:      ()    => client.get('/admin/stats'),
+  getMrr:        ()    => client.get('/admin/mrr'),
+  getDealers:    (p)   => client.get('/admin/dealers', { params: p }),
+  suspendDealer: (id)  => client.post(`/admin/dealers/${id}/suspend`),
+  restoreDealer: (id)  => client.post(`/admin/dealers/${id}/restore`),
+  loginAsDealer: (id)  => client.post(`/admin/dealers/${id}/login-as`),
+  getPlans:      ()    => client.get('/admin/plans'),
+  getSupport:    ()    => client.get('/admin/support'),
+};
+
+/* ── Website Builder API ─────────────────────────────────────── */
+export const websiteApi = {
+  getConfig:    ()     => client.get('/websites/config'),
+  saveConfig:   (body) => client.put('/websites/config', body),
+  publish:      ()     => client.post('/websites/publish'),
+  getAnalytics: ()     => client.get('/websites/analytics'),
+};
+
+/* ── Analytics API ───────────────────────────────────────────── */
+export const analyticsApi = {
+  getOverview:    ()     => client.get('/analytics/overview'),
+  getRevenue:     (p)    => client.get('/analytics/revenue', { params:p }),
+  getLeads:       (p)    => client.get('/analytics/leads',   { params:p }),
+  getFunnel:      ()     => client.get('/analytics/funnel'),
+  getAgents:      ()     => client.get('/analytics/agents'),
+  getHeatmap:     ()     => client.get('/analytics/heatmap'),
+  getTopVehicles: ()     => client.get('/analytics/top-vehicles'),
+  getWebsite:     ()     => client.get('/analytics/website'),
+  getReport:      (type) => client.get(`/analytics/report/${type}`),
+};
+
+/* ── Payments API ────────────────────────────────────────────── */
+export const paymentsApi = {
+  getTransactions: (p)   => client.get('/payments',           { params:p }),
+  getSummary:      ()    => client.get('/payments/summary'),
+  initiate:        (b)   => client.post('/payments/initiate', b),
+  verify:          (ref) => client.get(`/payments/verify/${ref}`),
+};
+
+/* ── Team API ────────────────────────────────────────────────── */
+export const teamApi = {
+  getMembers:    ()        => client.get('/team'),
+  inviteMember:  (data)    => client.post('/team/invite', data),
+  updateMember:  (id,data) => client.put(`/team/${id}`, data),
+};
+
+/* ── Commissions API ─────────────────────────────────────────── */
+export const commissionsApi = {
+  getCommissions: (p) => client.get('/commissions', { params:p }),
+};
+
+/* ── Settings API ────────────────────────────────────────────── */
+export const settingsApi = {
+  get:                  ()     => client.get('/settings'),
+  updateProfile:        (data) => client.put('/settings/profile', data),
+  updateNotifications:  (data) => client.put('/settings/notifications', data),
+  getApiKey:            ()     => client.get('/settings/api-key'),
+  regenerateApiKey:     ()     => client.post('/settings/api-key/regenerate'),
+  updateWebhook:        (data) => client.put('/settings/webhook', data),
+};
