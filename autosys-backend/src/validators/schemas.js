@@ -165,18 +165,88 @@ const paginationSchema = z.object({
   order:  z.enum(['asc', 'desc']).default('desc'),
 });
 
+// ── Additional partial schemas needed by routes ───────────────
+
+// vehicles route imports: createVehicleSchema, updateVehicleSchema, listVehiclesSchema
+const createVehicleSchema = vehicleSchema;
+const updateVehicleSchema = vehicleSchema.partial();
+const listVehiclesSchema  = paginationSchema.extend({
+  status:    z.enum(['available', 'reserved', 'sold']).optional(),
+  brand:     z.string().optional(),
+  min_price: z.coerce.number().optional(),
+  max_price: z.coerce.number().optional(),
+  fuel_type: z.string().optional(),
+});
+
+// leads route imports: createLeadSchema, updateLeadSchema, updateLeadStageSchema, addNoteSchema, listLeadsSchema
+const createLeadSchema      = leadSchema;
+const updateLeadSchema      = leadSchema.partial();
+const updateLeadStageSchema = z.object({
+  stage: z.enum(['new', 'contacted', 'interested', 'negotiation', 'closed_won', 'closed_lost']),
+});
+const addNoteSchema = z.object({
+  content: z.string().min(1).max(2000),
+});
+const listLeadsSchema = paginationSchema.extend({
+  stage:  z.string().optional(),
+  source: z.string().optional(),
+});
+
+// campaigns route imports: createCampaignSchema
+const createCampaignSchema = campaignSchema;
+
+// settings route imports: updateProfileSchema
+const updateProfileSchema = settingsSchema.partial();
+
+// team route imports: inviteTeamMemberSchema
+const inviteTeamMemberSchema = z.object({
+  name:  z.string().min(2).max(200).trim().optional(),
+  full_name: z.string().min(2).max(200).trim().optional(),
+  email: z.string().email().toLowerCase().trim(),
+  role:  z.enum(['owner', 'admin', 'agent', 'viewer']).default('agent'),
+  phone: z.string().optional(),
+});
+
+// website config schema
+const websiteConfigSchema = z.object({
+  hero_headline:    z.string().max(200).optional(),
+  hero_subtext:     z.string().max(500).optional(),
+  hero_cta:         z.string().max(100).optional(),
+  meta_title:       z.string().max(200).optional(),
+  meta_description: z.string().max(500).optional(),
+  custom_domain:    z.string().max(200).optional(),
+  show_prices:      z.boolean().optional(),
+  whatsapp_number:  z.string().max(20).optional(),
+  theme:            z.string().optional(),
+});
+
 module.exports = {
+  // Primary schemas
   vehicleSchema,
   leadSchema,
   dealSchema,
   aiDescriptionSchema,
   aiPricingSchema,
-  aiFollowupSchema,   // FIX: added
-  aiSocialSchema,     // FIX: added
-  aiChatSchema,       // FIX: added
+  aiFollowupSchema,
+  aiSocialSchema,
+  aiChatSchema,
   teamMemberSchema,
   campaignSchema,
   settingsSchema,
   paymentSchema,
   paginationSchema,
+  websiteConfigSchema,
+
+  // Aliases — routes import these specific names
+  createVehicleSchema,
+  updateVehicleSchema,
+  listVehiclesSchema,
+  createLeadSchema,
+  updateLeadSchema,
+  updateLeadStageSchema,
+  addNoteSchema,
+  listLeadsSchema,
+  createCampaignSchema,
+  updateProfileSchema,
+  inviteTeamMemberSchema,
 };
