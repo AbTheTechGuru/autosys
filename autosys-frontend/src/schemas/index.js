@@ -25,7 +25,7 @@ export const vehicleSchema = z.object({
   mileage:      z.coerce.number().min(0, 'Mileage cannot be negative'),
   fuel_type:    z.enum(['petrol', 'diesel', 'hybrid', 'electric', 'cng']),
   transmission: z.enum(['automatic', 'manual']),
-  condition:    z.enum(['foreign-used', 'nigerian-used', 'brand-new']),
+  condition:    z.enum(['new', 'foreign-used', 'nigerian-used', 'salvage']).default('foreign-used'),
   status:       z.enum(['available', 'reserved', 'sold']).default('available'),
   color:        z.string().max(40).optional(),
   description:  z.string().max(2000).optional(),
@@ -79,7 +79,7 @@ export const toFuelType  = (v) =>
 export const toTrans     = (v) =>
   v?.toLowerCase();
 export const toCondition = (v) =>
-  ({ 'Foreign Used':'foreign_used', 'Used':'locally_used', 'New':'brand_new', 'Brand New':'brand_new' }[v] ?? v.toLowerCase().replace(' ', '_'));
+  ({ 'Foreign Used':'foreign-used', 'Nigerian Used':'nigerian-used', 'New':'new', 'Brand New':'new', 'Salvage':'salvage' }[v] ?? v.toLowerCase().replace(' ', '-'));
 export const toStage     = (v) => v?.toLowerCase().replace(' ', '_');
 export const toSource    = (v) => v?.toLowerCase().replace('-', '').replace(' ', '');
 
