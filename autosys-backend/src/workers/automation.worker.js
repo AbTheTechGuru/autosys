@@ -22,9 +22,12 @@ let queue;
 let worker;
 
 function createConnection() {
+  const isTLS = REDIS_URL.startsWith('rediss://');
   return new IORedis(REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck:     false,
+    // Fix: Upstash and other TLS Redis providers use rediss:// protocol
+    tls:                  isTLS ? {} : undefined,
   });
 }
 
@@ -45,7 +48,13 @@ function initQueue() {
  * In production, run in a separate process.
  */
 function startWorker() {
-  const connection = createConnection();
+  let connection;
+  try {
+    connection = createConnection();
+  } catch (err) {
+    logger.error({ err: err.message }, '[Worker] Redis connection failed — automations disabled');
+    return null;
+  }
 
   worker = new Worker(
     QUEUE_NAME,
@@ -56,9 +65,28 @@ function startWorker() {
       // Delegate to the engine's action executor
       await engine._executeActions(job.data);
 
-      // Increment run count
+      // Increment run count — direct update (no RPC needed)
       const { supabase } = require('../config/supabase');
-      await supabase.rpc('increment_automation_run', { automation_id: automationId });
+      await supabase
+        .from('automations')
+        .update({
+          run_count:    supabase.rpc ? undefined : undefined, // handled below
+          last_run_at:  new Date().toISOString(),
+          updated_at:   new Date().toISOString(),
+        })
+        .eq('id', automationId);
+      // Separately increment run_count safely
+      const { data: auto } = await supabase
+        .from('automations')
+        .select('run_count')
+        .eq('id', automationId)
+        .single();
+      if (auto) {
+        await supabase
+          .from('automations')
+          .update({ run_count: (auto.run_count || 0) + 1 })
+          .eq('id', automationId);
+      }
 
       logger.info({ jobId: job.id }, '[Worker] Job complete');
     },
@@ -150,7 +178,8 @@ process.on('SIGINT',  shutdown);
 // ── If run directly as a process ─────────────────────────────────
 if (require.main === module) {
   // Standalone worker process
-  require('../../server.global'); // Ensure env is loaded
+  // Load env vars if running standalone
+  require('dotenv').config({ path: require('path').resolve(__dirname, '../../../.env') });
   startWorker();
   startSchedulePoller();
 }
