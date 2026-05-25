@@ -23,8 +23,13 @@
 import axios from 'axios';
 
 const BASE_URL = import.meta.env.VITE_API_URL;
-if (!BASE_URL && import.meta.env.PROD) {
-  throw new Error('[AutoSys] VITE_API_URL is not set. Check your .env file.');
+if (!BASE_URL) {
+  if (import.meta.env.PROD) {
+    // In production this is a hard error — set VITE_API_URL in Vercel dashboard
+    console.error('[AutoSys] VITE_API_URL is not set. API calls will fail.');
+  } else {
+    console.warn('[AutoSys] VITE_API_URL not set — falling back to http://localhost:3001/api/v1');
+  }
 }
 
 // ── Token helpers (single source of truth) ────────────────────
@@ -36,11 +41,13 @@ export const setToken   = (t)     => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = ()      => {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_KEY);
+  // Notify other browser tabs
+  try { window.dispatchEvent(new StorageEvent('storage', { key: TOKEN_KEY })); } catch {}
 };
 
 // ── Axios instance ────────────────────────────────────────────
 const client = axios.create({
-  baseURL:         BASE_URL || 'http://localhost:5000/api/v1',
+  baseURL:         BASE_URL || 'http://localhost:3001/api/v1',
   timeout:         30_000,
   withCredentials: true,                      // send HttpOnly refresh cookie
   headers:         { 'Content-Type': 'application/json' },
@@ -59,7 +66,7 @@ let pendingRefresh = null;   // shared Promise while a refresh is in-flight
 async function doRefresh() {
   const storedRefresh = localStorage.getItem(REFRESH_KEY);
   const { data } = await axios.post(
-    `${BASE_URL || 'http://localhost:5000/api/v1'}/auth/refresh`,
+    `${BASE_URL || 'http://localhost:3001/api/v1'}/auth/refresh`,
     { refreshToken: storedRefresh || undefined },
     { withCredentials: true },
   );
@@ -76,6 +83,13 @@ client.interceptors.response.use(
   (res) => res,
   async (err) => {
     const original = err.config;
+
+    // Network errors (no response) — could be server cold start on Render free tier
+    if (!err.response) {
+      // Don't retry indefinitely — just reject with a clear message
+      err.message = 'Network error — check your connection or the server may be starting up (Render free tier takes ~30s to wake)';
+      return Promise.reject(err);
+    }
 
     // Only intercept 401s that haven't been retried yet
     if (err.response?.status !== 401 || original._retry) {
