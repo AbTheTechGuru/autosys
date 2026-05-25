@@ -156,7 +156,7 @@ function AddVehicleModal({ open, onClose }) {
             <Select value={form.condition} onChange={set('condition')}>
               <option value="foreign-used">Foreign Used</option>
               <option value="nigerian-used">Nigerian Used</option>
-              <option value="brand-new">Brand New</option>
+              <option value="new">Brand New</option>
             </Select>
           </Field>
           <Field label="Status">
