@@ -23,6 +23,13 @@ const REQUIRED_VARS = [
   'JWT_SECRET',
 ];
 
+// In production, REDIS_URL is required for token revocation
+// Warn early rather than crashing deep in redis.js
+const NODE_ENV_EARLY = process.env.NODE_ENV || 'development';
+if (NODE_ENV_EARLY === 'production' && !process.env.REDIS_URL) {
+  console.error('[AutoSys] WARNING: REDIS_URL not set — token revocation disabled. Set it in Render Environment Variables.');
+}
+
 const missing = REQUIRED_VARS.filter((k) => !process.env[k]);
 if (missing.length > 0) {
   throw new Error(
@@ -44,7 +51,7 @@ if (NODE_ENV === 'production' && process.env.JWT_SECRET.length < 32) {
 
 const env = {
   NODE_ENV,
-  PORT:                    parseInt(process.env.PORT || '5000', 10),
+  PORT:                    parseInt(process.env.PORT || '3001', 10),
   // FIX: no leading slash — used as `/${env.API_VERSION}/...`
   API_VERSION:             process.env.API_VERSION || 'api/v1',
 
