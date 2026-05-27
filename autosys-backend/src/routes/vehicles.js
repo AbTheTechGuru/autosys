@@ -191,20 +191,3 @@ router.delete('/:id/images', async (req, res) => {
   if (error) throw error;
   res.json({ vehicle: updated });
 });
-
-
-router.get("/", async (req, res) => {
-  try {
-    const vehicles = await Vehicle.findAll()
-
-    res.json({
-      success: true,
-      data: vehicles,
-    })
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    })
-  }
-});
