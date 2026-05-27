@@ -98,7 +98,7 @@ export const useSalesStore = create((set, get) => ({
       const vehicles = data.vehicles ?? data;
       if (vehicles.length > 0) {
         const FUEL_MAP  = { petrol:'Petrol', diesel:'Diesel', hybrid:'Hybrid', electric:'Electric', cng:'CNG' };
-        const COND_MAP  = { 'foreign-used':'Foreign Used', 'nigerian-used':'Nigerian Used', 'brand-new':'Brand New', foreign_used:'Foreign Used', locally_used:'Used', brand_new:'New' };
+        const COND_MAP  = { foreign_used:'Foreign Used', locally_used:'Nigerian Used', brand_new:'Brand New', nigerian_used:'Nigerian Used', new:'Brand New', salvage:'Salvage', 'foreign-used':'Foreign Used', 'locally-used':'Nigerian Used', 'brand-new':'Brand New' };
         const STAT_MAP  = { available:'Available', reserved:'Reserved', sold:'Sold' };
         const EMOJI_MAP = { Toyota:'🚗', Mercedes:'🚙', BMW:'🚙', Lexus:'🚘', Honda:'🚗', Ford:'🛻' };
 
