@@ -182,3 +182,14 @@ export const settingsApi = {
   regenerateApiKey:     ()     => client.post('/settings/api-key/regenerate'),
   updateWebhook:        (data) => client.put('/settings/webhook', data),
 };
+
+
+export const inventoryApi = {
+  getVehicles: () => api.get("/inventory"),
+
+  createVehicle: (data) => api.post("/inventory", data),
+
+  updateVehicle: (id, data) => api.put(`/inventory/${id}`, data),
+
+  deleteVehicle: (id) => api.delete(`/inventory/${id}`),
+}
