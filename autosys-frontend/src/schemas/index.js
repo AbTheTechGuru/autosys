@@ -25,7 +25,7 @@ export const vehicleSchema = z.object({
   mileage:      z.coerce.number().min(0, 'Mileage cannot be negative'),
   fuel_type:    z.enum(['petrol', 'diesel', 'hybrid', 'electric', 'cng']),
   transmission: z.enum(['automatic', 'manual']),
-  condition:    z.enum(['new', 'foreign-used', 'nigerian-used', 'salvage']).default('foreign-used'),
+  condition:    z.enum(['foreign_used','locally_used','brand_new','nigerian_used','new','salvage']).default('foreign_used'),
   status:       z.enum(['available', 'reserved', 'sold']).default('available'),
   color:        z.string().max(40).optional(),
   description:  z.string().max(2000).optional(),
@@ -40,8 +40,8 @@ export const leadSchema = z.object({
   email:            z.string().email().optional().or(z.literal('')),
   vehicle_interest: z.string().max(200).optional(),
   budget:           z.coerce.number().min(0).optional(),
-  source:           z.enum(['website', 'whatsapp', 'referral', 'instagram', 'facebook', 'walk-in', 'phone', 'other']).default('other'),
-  stage:            z.enum(['new', 'contacted', 'negotiation', 'closed_won', 'closed_lost']).default('new'),
+  source:           z.enum(['website','whatsapp','referral','instagram','facebook','walkin','walk-in','phone','tiktok','direct','other']).default('other'),
+  stage:            z.enum(['new','contacted','negotiating','negotiation','interested','closed_won','closed_lost']).default('new'),
   notes:            z.string().max(2000).optional(),
 });
 
