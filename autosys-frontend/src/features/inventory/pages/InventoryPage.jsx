@@ -75,7 +75,7 @@ function AddVehicleModal({ open, onClose }) {
   const [form, setForm]     = useState({
     brand:'', model:'', year:'', price:'', mileage:'',
     fuel_type:'petrol', transmission:'automatic',
-    condition:'foreign-used', status:'available', description:'',
+    condition:'foreign_used', status:'available', description:'',
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -115,7 +115,7 @@ function AddVehicleModal({ open, onClose }) {
 
       toast('Vehicle added!', 'ok');
       onClose();
-      setForm({ brand:'', model:'', year:'', price:'', mileage:'', fuel_type:'petrol', transmission:'automatic', condition:'foreign-used', status:'available', description:'' });
+      setForm({ brand:'', model:'', year:'', price:'', mileage:'', fuel_type:'petrol', transmission:'automatic', condition:'foreign_used', status:'available', description:'' });
       setPhotos([]);
       setErrors({});
     } catch (err) {
@@ -154,9 +154,9 @@ function AddVehicleModal({ open, onClose }) {
           </Field>
           <Field label="Condition">
             <Select value={form.condition} onChange={set('condition')}>
-              <option value="foreign-used">Foreign Used</option>
-              <option value="nigerian-used">Nigerian Used</option>
-              <option value="new">Brand New</option>
+              <option value="foreign_used">Foreign Used</option>
+              <option value="locally_used">Nigerian Used</option>
+              <option value="brand_new">Brand New</option>
             </Select>
           </Field>
           <Field label="Status">
