@@ -192,4 +192,4 @@ export const inventoryApi = {
   updateVehicle: (id, data) => api.put(`/inventory/${id}`, data),
 
   deleteVehicle: (id) => api.delete(`/inventory/${id}`),
-}
+};
