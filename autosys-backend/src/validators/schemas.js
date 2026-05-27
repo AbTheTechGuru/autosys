@@ -182,7 +182,7 @@ const listVehiclesSchema  = paginationSchema.extend({
 const createLeadSchema      = leadSchema;
 const updateLeadSchema      = leadSchema.partial();
 const updateLeadStageSchema = z.object({
-  stage: z.enum(['new', 'contacted', 'interested', 'negotiation', 'closed_won', 'closed_lost']),
+  stage: z.enum(['new','contacted','negotiating','negotiation','interested','closed_won','closed_lost']),
 });
 const addNoteSchema = z.object({
   content: z.string().min(1).max(2000),
