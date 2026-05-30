@@ -75,7 +75,7 @@ export function AnalyticsPage() {
 
   useEffect(()=>{ fetchData(); },[fetchData]);
 
-  const ov  = data.overview?.overview || data.overview || {};
+  const ov  = data.overview || {};  // FIX: backend returns flat object
   const rev = data.revenue?.revenue   || data.revenue  || {};
   const ld  = data.leads?.leads       || data.leads    || {};
   const fn  = data.funnel?.funnel     || data.funnel   || {};
@@ -98,8 +98,8 @@ export function AnalyticsPage() {
       {tab==='overview'&&(
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            <StatCard label="Total Leads"     value={ov.total_leads??'—'} change={ov.leads_change?`▲ ${ov.leads_change}% vs last month`:null} loading={loading}/>
-            <StatCard label="Revenue (MTD)"   value={ov.revenue_mtd?fmtM(ov.revenue_mtd/100):'—'} loading={loading}/>
+            <StatCard label="Total Leads"     value={ov.leads_total??'—'} change={ov.leads_change?`▲ ${ov.leads_change}% vs last month`:null} loading={loading}/>
+            <StatCard label="Revenue (MTD)"   value={ov.revenue?fmtM(ov.revenue/100):'—'} loading={loading}/>
             <StatCard label="Conversion Rate" value={ov.conversion_rate?`${ov.conversion_rate}%`:'—'} loading={loading}/>
             <StatCard label="Avg Deal Value"  value={ov.avg_deal?fmtM(ov.avg_deal/100):'—'} loading={loading}/>
           </div>
