@@ -47,7 +47,7 @@ export function DashboardPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const overview = data?.overview || {};
+  const overview = data || {};  // FIX: backend returns flat object, not nested under 'overview'
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
@@ -67,10 +67,10 @@ export function DashboardPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <StatCard label="Total Leads"    value={overview.total_leads     ?? '—'} icon="phone"   color={G.bl} change={overview.leads_change}   loading={loading}/>
-        <StatCard label="Revenue (MTD)"  value={overview.revenue_mtd ? fmtM(overview.revenue_mtd/100) : '—'} icon="pay" color={G.ok} change={overview.revenue_change} loading={loading}/>
-        <StatCard label="Vehicles Listed" value={overview.vehicles        ?? '—'} icon="car"     color={G.g}  loading={loading}/>
-        <StatCard label="Deals Won"       value={overview.deals_won       ?? '—'} icon="check"   color={G.pu} change={overview.deals_change}    loading={loading}/>
+        <StatCard label="Total Leads"    value={overview.leads_total     ?? '—'} icon="phone"   color={G.bl} change={overview.leads_change}   loading={loading}/>
+        <StatCard label="Revenue (MTD)"  value={overview.revenue ? fmtM(overview.revenue/100) : '—'} icon="pay" color={G.ok} change={overview.revenue_change} loading={loading}/>
+        <StatCard label="Vehicles Listed" value={overview.fleet_size      ?? '—'} icon="car"     color={G.g}  loading={loading}/>
+        <StatCard label="Deals Won"       value={overview.deals_closed    ?? '—'} icon="check"   color={G.pu} change={overview.deals_change}    loading={loading}/>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
