@@ -49,23 +49,82 @@ export const useSalesStore = create((set, get) => ({
   setSearch:       (q) => set({ searchQuery: q }),
 
   // ── Vehicle mutations ──────────────────────────────────────
-  addVehicle: (vehicle) => {
-    const v = {
+  addVehicle: async (vehicle) => {
+    // Optimistically add a temp entry while the API call is in-flight
+    const tempId = `temp-${Date.now()}`;
+    const temp = {
       ...vehicle,
-      id: `local-${Date.now()}`,
-      e: '🚗', color: '#444', views: 0, inq: 0, days: 0,
+      id: tempId,
+      e: '🚗', color: vehicle.color || '#444', views: 0, inq: 0, days: 0,
       price:   Number(vehicle.price),
       mileage: Number(vehicle.mileage),
     };
-    set((s) => ({ vehicles: [v, ...s.vehicles] }));
-    return v;
+    set((s) => ({ vehicles: [temp, ...s.vehicles] }));
+    try {
+      const { data } = await salesApi.createVehicle({
+        brand:        vehicle.brand,
+        model:        vehicle.model,
+        year:         Number(vehicle.year),
+        price:        Number(vehicle.price) * 100, // convert naira → kobo for backend
+        mileage:      Number(vehicle.mileage),
+        fuel_type:    (vehicle.fuel || 'petrol').toLowerCase(),
+        transmission: (vehicle.trans || 'automatic').toLowerCase(),
+        condition:    (vehicle.cond || 'foreign_used').toLowerCase().replace(/ /g, '_'),
+        status:       (vehicle.status || 'available').toLowerCase(),
+        color:        vehicle.color || '#444',
+      });
+      const saved = data.vehicle ?? data;
+      // Replace temp entry with the real persisted record
+      const FUEL_MAP = { petrol:'Petrol', diesel:'Diesel', hybrid:'Hybrid', electric:'Electric', cng:'CNG' };
+      const COND_MAP = { foreign_used:'Foreign Used', locally_used:'Nigerian Used', brand_new:'Brand New', nigerian_used:'Nigerian Used', new:'Brand New', salvage:'Salvage' };
+      const STAT_MAP = { available:'Available', reserved:'Reserved', sold:'Sold' };
+      const EMOJI_MAP = { Toyota:'🚗', Mercedes:'🚙', BMW:'🚙', Lexus:'🚘', Honda:'🚗', Ford:'🛻' };
+      const mapped = {
+        id:      saved.id,
+        t:       `${saved.year} ${saved.brand} ${saved.model}`,
+        brand:   saved.brand,
+        model:   saved.model,
+        year:    saved.year,
+        price:   fromKobo(saved.price),
+        mileage: saved.mileage,
+        fuel:         FUEL_MAP[saved.fuel_type]   || saved.fuel_type,
+        trans:        saved.transmission === 'automatic' ? 'Automatic' : 'Manual',
+        cond:         COND_MAP[saved.condition]   || saved.condition,
+        status:  STAT_MAP[saved.status]      || saved.status,
+        color:   saved.color || '#444',
+        e:       EMOJI_MAP[saved.brand] || '🚗',
+        views:   0, inq: 0, days: 0,
+      };
+      set((s) => ({ vehicles: s.vehicles.map((v) => v.id === tempId ? mapped : v) }));
+      return mapped;
+    } catch (err) {
+      // Roll back optimistic entry on failure
+      set((s) => ({ vehicles: s.vehicles.filter((v) => v.id !== tempId) }));
+      throw err;
+    }
   },
 
-  updateVehicle: (id, updates) =>
-    set((s) => ({ vehicles: s.vehicles.map((v) => v.id === id ? { ...v, ...updates } : v) })),
+  updateVehicle: async (id, updates) => {
+    // Optimistic local update
+    set((s) => ({ vehicles: s.vehicles.map((v) => v.id === id ? { ...v, ...updates } : v) }));
+    try {
+      await salesApi.updateVehicle(id, updates);
+    } catch (err) {
+      // On failure refresh from backend
+      get().fetchVehicles();
+      throw err;
+    }
+  },
 
-  removeVehicle: (id) =>
-    set((s) => ({ vehicles: s.vehicles.filter((v) => v.id !== id) })),
+  removeVehicle: async (id) => {
+    set((s) => ({ vehicles: s.vehicles.filter((v) => v.id !== id) }));
+    try {
+      await salesApi.deleteVehicle(id);
+    } catch (err) {
+      get().fetchVehicles();
+      throw err;
+    }
+  },
 
   // ── Pipeline mutations ─────────────────────────────────────
   moveDeal: (dealId, fromCol, toCol) => {
@@ -98,7 +157,7 @@ export const useSalesStore = create((set, get) => ({
       const vehicles = data.vehicles ?? data;
       if (vehicles.length > 0) {
         const FUEL_MAP  = { petrol:'Petrol', diesel:'Diesel', hybrid:'Hybrid', electric:'Electric', cng:'CNG' };
-        const COND_MAP  = { 'foreign-used':'Foreign Used', 'nigerian-used':'Nigerian Used', 'brand-new':'Brand New', foreign_used:'Foreign Used', locally_used:'Used', brand_new:'New' };
+        const COND_MAP  = { foreign_used:'Foreign Used', locally_used:'Nigerian Used', brand_new:'Brand New', nigerian_used:'Nigerian Used', new:'Brand New', salvage:'Salvage', 'foreign-used':'Foreign Used', 'locally-used':'Nigerian Used', 'brand-new':'Brand New' };
         const STAT_MAP  = { available:'Available', reserved:'Reserved', sold:'Sold' };
         const EMOJI_MAP = { Toyota:'🚗', Mercedes:'🚙', BMW:'🚙', Lexus:'🚘', Honda:'🚗', Ford:'🛻' };
 
