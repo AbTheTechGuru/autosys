@@ -44,7 +44,7 @@ function DealCard({ card, colKey, onDragStart }) {
   );
 }
 
-function KanbanColumn({ colKey, cards, onDrop, onDragOver, onDragLeave, isOver, onAddDeal }) {
+function KanbanColumn({ colKey, cards, onDrop, onDragOver, onDragLeave, isOver, onAddDeal, onDragStart }) {
   const { color } = COL_META[colKey] ?? { color: G.g };
   const total     = cards.reduce((s, c) => s + c.v, 0);
   return (
@@ -72,7 +72,10 @@ function KanbanColumn({ colKey, cards, onDrop, onDragOver, onDragLeave, isOver, 
       <div className="flex flex-col gap-[7px] px-3 pb-3 flex-1 min-h-[90px]" role="list">
         {cards.map((card) => (
           <DealCard key={card.id} card={card} colKey={colKey}
-            onDragStart={(e) => { e.dataTransfer.setData('text/plain', JSON.stringify({ id: card.id, fromCol: colKey })); }} />
+            onDragStart={(e) => {
+            e.dataTransfer.setData('text/plain', JSON.stringify({ id: card.id, fromCol: colKey }));
+            onDragStart({ id: card.id, fromCol: colKey });
+          }} />
         ))}
         <Button variant="ghost" size="xs" className="justify-center mt-1"
           onClick={() => onAddDeal(colKey)}>
@@ -97,21 +100,23 @@ export function PipelinePage() {
   // Fetch real deals from backend on mount
   useEffect(() => { fetchPipeline(); }, [fetchPipeline]);
 
-  const handleDrop = async (toCol) => {
-    if (!drag || drag.fromCol === toCol) { setDrag(null); setOver(null); return; }
+  const handleDrop = async (toCol, dragData) => {
+    // Accept dragData directly from the drop event to avoid stale state
+    const d = dragData || drag;
+    if (!d || d.fromCol === toCol) { setDrag(null); setOver(null); return; }
     // Optimistic move
-    moveDeal(drag.id, drag.fromCol, toCol);
+    moveDeal(d.id, d.fromCol, toCol);
     toast(`Moved to ${toCol}!`);
 
     // Persist to backend (skip for seed/local IDs)
-    if (!drag.id.startsWith('dp-') && !drag.id.startsWith('local-')) {
+    if (!d.id.startsWith('dp-') && !d.id.startsWith('local-')) {
       const STAGE_MAP = { Lead:'lead', Negotiation:'negotiation', Payment:'payment', Delivered:'delivered' };
       try {
-        await salesApi.moveDeal(drag.id, STAGE_MAP[toCol] ?? toCol.toLowerCase());
+        await salesApi.moveDeal(d.id, STAGE_MAP[toCol] ?? toCol.toLowerCase());
       } catch (err) {
         toast(err.response?.data?.message || 'Stage update failed', 'danger');
         // Revert
-        moveDeal(drag.id, toCol, drag.fromCol);
+        moveDeal(d.id, toCol, d.fromCol);
       }
     }
     setDrag(null);
@@ -179,14 +184,21 @@ export function PipelinePage() {
             colKey={colKey}
             cards={cards}
             isOver={over === colKey}
+            onDragStart={(d) => setDrag(d)}
             onDragOver={() => setOver(colKey)}
             onDragLeave={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget)) setOver(null);
             }}
-            onDrop={() => {
-              // Read from dataTransfer set by DealCard
-              const raw = (window.__dragData__);
-              if (raw) { setDrag(raw); handleDrop(colKey); window.__dragData__ = null; }
+            onDrop={(e) => {
+              // Read drag data directly from dataTransfer (reliable cross-browser)
+              try {
+                const raw = e.dataTransfer.getData('text/plain');
+                if (raw) {
+                  const parsed = JSON.parse(raw);
+                  setDrag(parsed);
+                  handleDrop(colKey, parsed);
+                }
+              } catch {}
             }}
             onAddDeal={handleAddDeal}
           />
@@ -196,12 +208,4 @@ export function PipelinePage() {
   );
 }
 
-// Override native drag to capture data for drop handler
-if (typeof document !== 'undefined') {
-  document.addEventListener('dragstart', (e) => {
-    try {
-      const raw = e.dataTransfer?.getData('text/plain');
-      if (raw) window.__dragData__ = JSON.parse(raw);
-    } catch {}
-  }, true);
-}
+// Drag state is managed via React state + dataTransfer — no global listener needed
