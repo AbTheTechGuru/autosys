@@ -91,117 +91,47 @@ export const useSalesStore = create((set, get) => ({
 
   // ── Backend fetch ──────────────────────────────────────────
   fetchVehicles: async (params) => {
-  if (get().isLoading) return;
+    if (get().isLoading) return;
+    set({ isLoading: true, error: null });
+    try {
+      const { data } = await salesApi.getVehicles({ limit: 50, ...params });
+      const vehicles = data.vehicles ?? data;
+      if (vehicles.length > 0) {
+        const FUEL_MAP  = { petrol:'Petrol', diesel:'Diesel', hybrid:'Hybrid', electric:'Electric', cng:'CNG' };
+        const COND_MAP  = { 'foreign-used':'Foreign Used', 'nigerian-used':'Nigerian Used', 'brand-new':'Brand New', foreign_used:'Foreign Used', locally_used:'Used', brand_new:'New' };
+        const STAT_MAP  = { available:'Available', reserved:'Reserved', sold:'Sold' };
+        const EMOJI_MAP = { Toyota:'🚗', Mercedes:'🚙', BMW:'🚙', Lexus:'🚘', Honda:'🚗', Ford:'🛻' };
 
-  set({
-    isLoading: true,
-    error: null,
-  });
-
-  try {
-    const response = await salesApi.getVehicles({
-      limit: 50,
-      ...params,
-    });
-
-    const rawVehicles =
-      response?.data?.vehicles ||
-      response?.data?.data ||
-      response?.data ||
-      [];
-
-    const vehicles = Array.isArray(rawVehicles)
-      ? rawVehicles
-      : [];
-
-    const FUEL_MAP = {
-      petrol: 'Petrol',
-      diesel: 'Diesel',
-      hybrid: 'Hybrid',
-      electric: 'Electric',
-      cng: 'CNG',
-    };
-
-    const COND_MAP = {
-      foreign_used: 'Foreign Used',
-      locally_used: 'Nigerian Used',
-      brand_new: 'Brand New',
-      nigerian_used: 'Nigerian Used',
-      new: 'Brand New',
-      salvage: 'Salvage',
-      'foreign-used': 'Foreign Used',
-      'locally-used': 'Nigerian Used',
-      'brand-new': 'Brand New',
-    };
-
-    const STAT_MAP = {
-      available: 'Available',
-      reserved: 'Reserved',
-      sold: 'Sold',
-    };
-
-    const EMOJI_MAP = {
-      Toyota: '🚗',
-      Mercedes: '🚙',
-      BMW: '🚙',
-      Lexus: '🚘',
-      Honda: '🚗',
-      Ford: '🛻',
-    };
-
-    const mapped = vehicles.map((v) => ({
-      id: v.id,
-      t: `${v.year} ${v.brand} ${v.model}`,
-      brand: v.brand,
-      model: v.model,
-      year: v.year,
-      price: fromKobo(v.price),
-      mileage: v.mileage,
-
-      fuel: FUEL_MAP[v.fuel_type] || v.fuel_type,
-      fuel_type: v.fuel_type,
-
-      trans:
-        v.transmission === 'automatic'
-          ? 'Automatic'
-          : 'Manual',
-
-      transmission: v.transmission,
-
-      cond: COND_MAP[v.condition] || v.condition,
-      condition: v.condition,
-
-      status: STAT_MAP[v.status] || v.status,
-
-      color: v.color || '#444',
-
-      e: EMOJI_MAP[v.brand] || '🚗',
-
-      views: v.views_count || 0,
-      inq: v.inquiry_count || 0,
-      days: v.days_listed || 0,
-    }));
-
-    set({
-      vehicles: mapped,
-      dataLoaded: true,
-      error: null,
-    });
-
-  } catch (err) {
-    console.error("Vehicle fetch error:", err);
-
-    set({
-      vehicles: [],
-      error: err.message,
-    });
-
-  } finally {
-    set({
-      isLoading: false,
-    });
-  }
-},
+        const mapped = vehicles.map((v) => ({
+          id:      v.id,
+          t:       `${v.year} ${v.brand} ${v.model}`,
+          brand:   v.brand,
+          model:   v.model,
+          year:    v.year,
+          price:   fromKobo(v.price),
+          mileage: v.mileage,
+          fuel:         FUEL_MAP[v.fuel_type]    || v.fuel_type,
+          fuel_type:    v.fuel_type,
+          trans:        v.transmission === 'automatic' ? 'Automatic' : 'Manual',
+          transmission: v.transmission,
+          cond:         COND_MAP[v.condition]    || v.condition,
+          condition:    v.condition,
+          status:  STAT_MAP[v.status]       || v.status,
+          color:   v.color || '#444',
+          e:       EMOJI_MAP[v.brand] || '🚗',
+          views:   v.views_count    || 0,
+          inq:     v.inquiry_count  || 0,
+          days:    v.days_listed    || 0,
+        }));
+        set({ vehicles: mapped, dataLoaded: true });
+      }
+    } catch (err) {
+      if (!get().dataLoaded) set({ error: `Using cached data (${err.message})` });
+      else set({ error: err.message });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
 
   fetchPipeline: async () => {
     try {
